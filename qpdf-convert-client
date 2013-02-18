@@ -52,7 +52,7 @@ exec >&-
 
 # First, get the no of pages:
 read NO_PAGES
-if [[ ! $NO_PAGES =~ ^[0-9]+$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES -gt $MAX_PAGES ]] ; then
+if [[ ! "$NO_PAGES" =~ ^[0-9]+$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES -gt $MAX_PAGES ]] ; then
     echo "The remote party return invalid no of pages, aborting!" > /dev/stderr
     exit 1
 fi
