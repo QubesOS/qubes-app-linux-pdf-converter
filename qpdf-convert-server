@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+# The Qubes OS Project, http://www.qubes-os.org
+#
+# Copyright (C) 2013  Joanna Rutkowska <joanna@invisiblethingslab.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+# Requires: 
+# - poppler-utils (pdftocairo, pdfinfo)
+# - ImageMagick (convert)
+
+INPUT_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
+IMG_DEPTH=8
+
+# Get the original (untrusted) PDF file...
+cat > $INPUT_FILE
+
+# now, let's convert it into a simple representation,
+# and send back to the client.
+
+# Note that we might be compromised at this point (due to exploitation of PDF
+# parsing code) and so what we're sending back might very well be something
+# totally different than a decent simple representation -- the client should
+# never trust what we're sending back, and should discard anything that doesn't
+# look like the simple representation!
+
+NO_PAGES=$(pdfinfo $INPUT_FILE | grep "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
+echo $NO_PAGES
+
+cd /tmp
+pdftocairo $INPUT_FILE -png
+for PAGE_PNG in $(ls $INPUT_FILE-*.png) ; do 
+    IMG_WIDTH=$(identify -format "%w" $PAGE_PNG)
+    IMG_HEIGHT=$(identify -format "%h" $PAGE_PNG)
+    PAGE_RGB="$(basename $PAGE_PNG .png).rgb"
+    convert $PAGE_PNG -depth $IMG_DEPTH rgb:$PAGE_RGB
+    echo "$IMG_WIDTH $IMG_HEIGHT"
+    cat $PAGE_RGB
+done
+
+# Cleanup tmp files...
+# Note: our DispVM might get destroyed before the commands below
+# complete, but that doesn't hurt us, because this is... well a DispVM.
+rm -f $INPUT_FILE
+rm -f $INPUT_FILE-*.png
+rm -f $INPUT_FILE-*.rgb
