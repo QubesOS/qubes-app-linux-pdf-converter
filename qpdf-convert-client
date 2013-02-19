@@ -60,6 +60,7 @@ fi
 [ $VERBOSE -ge 1 ] && echo "-> Waiting for converted samples..." > /dev/stderr
 
 PAGE=1
+LIST_OF_PAGES=""
 while [ $PAGE -le $NO_PAGES ]; do
     read IMG_WIDTH IMG_HEIGHT
     if [ $VERBOSE -eq 1 ]; then
@@ -84,6 +85,7 @@ while [ $PAGE -le $NO_PAGES ]; do
     head -c $IMG_SIZE > $RGB_FILE
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
     convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE
+    LIST_OF_PAGES="$LIST_OF_PAGES $PDF_FILE"
     rm -f $RGB_FILE
     [ $VERBOSE -ge 2 ] && echo "--> saved to file: $PDF_FILE" > /dev/stderr
     PAGE=$(($PAGE+1))
@@ -94,7 +96,7 @@ if [ $VERBOSE -eq 1 ]; then
 fi
  
 [ $VERBOSE -ge 1 ] && echo "-> Merging pages into a single PDF document..." > /dev/stderr
-convert $RCVD_FILE-*.pdf $CONVERTED_FILE
+convert $LIST_OF_PAGES $CONVERTED_FILE
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
 # Cleanup
