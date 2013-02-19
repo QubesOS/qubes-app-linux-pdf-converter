@@ -78,10 +78,14 @@ while [ $PAGE -le $NO_PAGES ]; do
     if [ $IMG_SIZE -le 0 ] || [ $IMG_SIZE -gt $MAX_IMG_SIZE ]; then
         echo "Calculated image size is invalid, aborting!" > /dev/stderr
     fi
-    # save the simplified RGB image into a temp file:
+    # save the simplified RGB image into a temp PDF file:
     RGB_FILE=$RCVD_FILE-$PAGE.rgb
+    PDF_FILE=$RCVD_FILE-$PAGE.pdf
     head -c $IMG_SIZE > $RGB_FILE
-    [ $VERBOSE -ge 2 ] && echo "--> saved to file: $RGB_FILE" > /dev/stderr
+    # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
+    convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE
+    rm -f $RGB_FILE
+    [ $VERBOSE -ge 2 ] && echo "--> saved to file: $PDF_FILE" > /dev/stderr
     PAGE=$(($PAGE+1))
 done
 
@@ -89,9 +93,8 @@ if [ $VERBOSE -eq 1 ]; then
     echo > /dev/stderr
 fi
  
-# Now convert the simple representation back to a PDF...
-[ $VERBOSE -ge 1 ] && echo "-> Saving converted PDF: $CONVERTED_FILE..." > /dev/stderr
-convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RCVD_FILE-*.rgb $CONVERTED_FILE
+convert $RCVD_FILE-*.pdf $CONVERTED_FILE
+[ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
 # Cleanup
 rm -f $RCVD_FILE*
