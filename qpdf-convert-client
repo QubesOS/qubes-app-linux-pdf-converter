@@ -33,6 +33,9 @@ IMG_DEPTH=8
 MAX_IMG_SIZE=$(($MAX_IMG_WIDTH*$MAX_IMG_HEIGHT*3))
 
 VERBOSE=1
+if [ -n "$PROGRESS_FOR_GUI" ]; then
+    VERBOSE=0;
+fi
 
 
 # Send the input (untrusted) file to the server...
@@ -89,6 +92,8 @@ while [ $PAGE -le $NO_PAGES ]; do
     rm -f $RGB_FILE
     [ $VERBOSE -ge 2 ] && echo "--> saved to file: $PDF_FILE" > /dev/stderr
     PAGE=$(($PAGE+1))
+
+    [ -n "$PROGRESS_FOR_GUI" ] && echo $((($PAGE-1)*90/$NO_PAGES)) >& $SAVED_FD_1
 done
 
 if [ $VERBOSE -eq 1 ]; then
@@ -101,3 +106,4 @@ convert $LIST_OF_PAGES $CONVERTED_FILE
 
 # Cleanup
 rm -f $RCVD_FILE*
+[ -n "$PROGRESS_FOR_GUI" ] && echo "100" >& $SAVED_FD_1
