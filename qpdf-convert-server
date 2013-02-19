@@ -23,6 +23,8 @@
 # - ImageMagick (convert)
 
 INPUT_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
+TEMP_PNG_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX.png)
+TEMP_RGB_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX.pdf)
 IMG_DEPTH=8
 
 # Get the original (untrusted) PDF file...
@@ -41,19 +43,20 @@ NO_PAGES=$(pdfinfo $INPUT_FILE | grep "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
 echo $NO_PAGES
 
 cd /tmp
-pdftocairo $INPUT_FILE -png
-for PAGE_PNG in $(ls $INPUT_FILE-*.png) ; do 
-    IMG_WIDTH=$(identify -format "%w" $PAGE_PNG)
-    IMG_HEIGHT=$(identify -format "%h" $PAGE_PNG)
-    PAGE_RGB="$(basename $PAGE_PNG .png).rgb"
-    convert $PAGE_PNG -depth $IMG_DEPTH rgb:$PAGE_RGB
+PAGE=1
+while [ $PAGE -le $NO_PAGES ]; do
+    pdftocairo $INPUT_FILE -png -f $PAGE -l $PAGE -singlefile $(basename $TEMP_PNG_FILE .png)
+    IMG_WIDTH=$(identify -format "%w" $TEMP_PNG_FILE)
+    IMG_HEIGHT=$(identify -format "%h" $TEMP_PNG_FILE)
+    convert $TEMP_PNG_FILE -depth $IMG_DEPTH rgb:$TEMP_RGB_FILE
     echo "$IMG_WIDTH $IMG_HEIGHT"
-    cat $PAGE_RGB
+    cat $TEMP_RGB_FILE
+    PAGE=$(($PAGE+1))
 done
 
 # Cleanup tmp files...
 # Note: our DispVM might get destroyed before the commands below
 # complete, but that doesn't hurt us, because this is... well a DispVM.
 rm -f $INPUT_FILE
-rm -f $INPUT_FILE-*.png
-rm -f $INPUT_FILE-*.rgb
+rm -f $TEMP_PNG_FILE
+rm -f $TEMP_RGB_FILE
