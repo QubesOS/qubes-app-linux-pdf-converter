@@ -93,6 +93,7 @@ if [ $VERBOSE -eq 1 ]; then
     echo > /dev/stderr
 fi
  
+[ $VERBOSE -ge 1 ] && echo "-> Merging pages into a single PDF document..." > /dev/stderr
 convert $RCVD_FILE-*.pdf $CONVERTED_FILE
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
