@@ -34,7 +34,7 @@ Vendor:		Invisible Things Lab
 License:	GPL
 URL:		http://www.qubes-os.org
 
-Requires:	gpg
+Requires:	poppler-utils ImageMagick
 
 %define _builddir %(pwd)
 
