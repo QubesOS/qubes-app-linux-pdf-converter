@@ -86,6 +86,11 @@ while [ $PAGE -le $NO_PAGES ]; do
     RGB_FILE=$RCVD_FILE-$PAGE.rgb
     PDF_FILE=$RCVD_FILE-$PAGE.pdf
     head -c $IMG_SIZE > $RGB_FILE
+    RCVD_IMG_SIZE=$(stat -c %s $RGB_FILE)
+    if [ $RCVD_IMG_SIZE -ne $IMG_SIZE ]; then
+        echo "The remote party return invalid no of bytes of the RGB file, aborting!" > /dev/stderr
+        exit 2
+    fi
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
     convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE
     LIST_OF_PAGES="$LIST_OF_PAGES $PDF_FILE"
