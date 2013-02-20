@@ -104,6 +104,9 @@ fi
 convert $LIST_OF_PAGES $CONVERTED_FILE
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
+mv "$INPUT_FILE" ".${INPUT_FILE}"
+[ $VERBOSE -ge 1 ] && echo "-> Original file saved as .$INPUT_FILE" > /dev/stderr
+
 # Cleanup
 rm -f $RCVD_FILE*
 [ -n "$PROGRESS_FOR_GUI" ] && echo "100" >& $SAVED_FD_1
