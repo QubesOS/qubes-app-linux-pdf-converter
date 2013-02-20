@@ -21,9 +21,9 @@
 # Requires: 
 # - ImageMagick (convert)
 
-INPUT_FILE=$1
+INPUT_FILE="$1"
 RCVD_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
-CONVERTED_FILE=$(basename $1 .pdf).trusted.pdf
+CONVERTED_FILE="$(basename "$1" .pdf).trusted.pdf"
 
 
 MAX_PAGES=10000
@@ -40,7 +40,7 @@ fi
 
 # Send the input (untrusted) file to the server...
 [ $VERBOSE -ge 1 ] && echo "-> Sending file to remote VM..." > /dev/stderr
-cat $INPUT_FILE
+cat "$INPUT_FILE"
 exec >&-
 
 # ... and get the recvd *simple* representation:
@@ -106,7 +106,7 @@ if [ $VERBOSE -eq 1 ]; then
 fi
  
 [ $VERBOSE -ge 1 ] && echo "-> Merging pages into a single PDF document..." > /dev/stderr
-convert $LIST_OF_PAGES $CONVERTED_FILE
+convert $LIST_OF_PAGES "$CONVERTED_FILE"
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
 mv "$INPUT_FILE" ".${INPUT_FILE}"
