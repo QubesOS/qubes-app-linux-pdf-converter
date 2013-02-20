@@ -40,12 +40,18 @@ cat > $INPUT_FILE
 # look like the simple representation!
 
 NO_PAGES=$(pdfinfo $INPUT_FILE | grep "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
+if [ -z $NO_PAGES ]; then
+    # Perhaps this is not a PDF, only some JPG/PNG/etc? Let's try it anyway...
+    NO_PAGES=1
+fi
 echo $NO_PAGES
 
 cd /tmp
 PAGE=1
 while [ $PAGE -le $NO_PAGES ]; do
-    pdftocairo $INPUT_FILE -png -f $PAGE -l $PAGE -singlefile $(basename $TEMP_PNG_FILE .png)
+    # if pdftocairo fails, lets try the ImageMagick's convert -- perhaps this is just some img file?
+    pdftocairo $INPUT_FILE -png -f $PAGE -l $PAGE -singlefile $(basename $TEMP_PNG_FILE .png) || \
+        convert $INPUT_FILE png:$TEMP_PNG_FILE
     IMG_WIDTH=$(identify -format "%w" $TEMP_PNG_FILE)
     IMG_HEIGHT=$(identify -format "%h" $TEMP_PNG_FILE)
     convert $TEMP_PNG_FILE -depth $IMG_DEPTH rgb:$TEMP_RGB_FILE
