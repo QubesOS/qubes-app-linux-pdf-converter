@@ -35,6 +35,7 @@ License:	GPL
 URL:		http://www.qubes-os.org
 
 Requires:	poppler-utils ImageMagick
+Requires:	nautilus-actions
 
 %define _builddir %(pwd)
 
@@ -62,9 +63,8 @@ install -D -m 0644 qubes.PdfConvert $RPM_BUILD_ROOT/etc/qubes_rpc/qubes.PdfConve
 install -D qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes_rpc/policy/qubes.PdfConvert
 install -D qvm-convert-pdf $RPM_BUILD_ROOT/usr/bin/qvm-convert-pdf
 install -D qvm-convert-pdf.gnome $RPM_BUILD_ROOT/usr/lib/qubes/qvm-convert-pdf.gnome
-
-%post
-su user -c 'ln -s /usr/lib/qubes/qvm-convert-pdf.gnome /home/user/.gnome2/nautilus-scripts/"Convert untrusted PDF"'
+install -d $RPM_BUILD_ROOT/usr/share/file-manager/actions
+install -m 0644 qvm-convert-pdf-gnome.desktop $RPM_BUILD_ROOT/usr/share/file-manager/actions
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -76,6 +76,7 @@ rm -rf $RPM_BUILD_ROOT
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
 %attr(0644,root,root) /etc/qubes_rpc/qubes.PdfConvert
+/usr/share/file-manager/actions/qvm-convert-pdf-gnome.desktop
 
 %files dom0
 %config(noreplace) %attr(0664,root,qubes) /etc/qubes_rpc/policy/qubes.PdfConvert
