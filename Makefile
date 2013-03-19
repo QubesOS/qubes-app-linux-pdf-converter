@@ -36,6 +36,8 @@ help:
 rpms: rpms-vm
 
 rpms-dom0:
+	rpmbuild --define "_rpmdir rpm/" -bb rpm_spec/qpdf-converter-dom0.spec
+	rpm --addsign rpm/x86_64/qubes-pdf-converter-dom0*$(VERSION)*.rpm
 
 rpms-vm:
 	rpmbuild --define "_rpmdir rpm/" -bb rpm_spec/qpdf-converter.spec
@@ -53,7 +55,7 @@ update-repo-current-testing:
 		dist=$$(basename $$vmrepo) ;\
 		ln -f $(RPMS_DIR)/x86_64/qubes-pdf-converter*$(VERSION)*$$dist*.rpm $$vmrepo/rpm/ ;\
 	done
-	ln -f $(RPMS_DIR)/x86_64/qubes-pdf-converter-dom0-*$(VERSION_GPG)*.rpm ../yum/current-release/current-testing/dom0/rpm/
+	ln -f $(RPMS_DIR)/x86_64/qubes-pdf-converter-dom0-*$(VERSION)*.rpm ../yum/current-release/current-testing/dom0/rpm/
 
 update-repo-unstable:
 	for vmrepo in ../yum/current-release/unstable/vm/* ; do \
