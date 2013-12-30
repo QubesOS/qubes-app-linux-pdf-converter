@@ -55,7 +55,7 @@ exec >&-
 
 # First, get the no of pages:
 read NO_PAGES
-if [[ ! "$NO_PAGES" =~ ^[0-9]+$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES -gt $MAX_PAGES ]] ; then
+if [[ ! "$NO_PAGES" =~ ^[1-9][0-9]*$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES -gt $MAX_PAGES ]] ; then
     echo "The remote party return invalid no of pages, aborting!" > /dev/stderr
     exit 1
 fi
@@ -72,8 +72,8 @@ while [ $PAGE -le $NO_PAGES ]; do
     elif [ $VERBOSE -gt 1 ]; then    
         echo "-> Receving page $PAGE out of $NO_PAGES..." > /dev/stderr
     fi
-    if [[ ! "$IMG_WIDTH" =~ ^[0-9]+$ ]] || [ $IMG_WIDTH -le 0 ] || [ $IMG_WIDTH -gt $MAX_IMG_WIDTH ] || \
-       [[ ! "$IMG_HEIGHT" =~ ^[0-9]+$ ]] || [ $IMG_HEIGHT -le 0 ] || [ $IMG_HEIGHT -gt $MAX_IMG_HEIGHT ]; then
+    if [[ ! "$IMG_WIDTH" =~ ^[1-9][0-9]*$ ]] || [ $IMG_WIDTH -le 0 ] || [ $IMG_WIDTH -gt $MAX_IMG_WIDTH ] || \
+       [[ ! "$IMG_HEIGHT" =~ ^[1-9][0-9]*$ ]] || [ $IMG_HEIGHT -le 0 ] || [ $IMG_HEIGHT -gt $MAX_IMG_HEIGHT ]; then
         echo "The remote party return invalid image geometry info, aborting!" > /dev/stderr
         exit 2
     fi
