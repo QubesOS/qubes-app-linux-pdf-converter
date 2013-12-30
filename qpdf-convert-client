@@ -81,6 +81,7 @@ while [ $PAGE -le $NO_PAGES ]; do
     IMG_SIZE=$((IMG_WIDTH*IMG_HEIGHT*3))
     if [ $IMG_SIZE -le 0 ] || [ $IMG_SIZE -gt $MAX_IMG_SIZE ]; then
         echo "Calculated image size is invalid, aborting!" > /dev/stderr
+        exit 2
     fi
     # save the simplified RGB image into a temp PDF file:
     RGB_FILE=$RCVD_FILE-$PAGE.rgb
