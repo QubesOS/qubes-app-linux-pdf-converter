@@ -46,10 +46,10 @@ Qubes policy for qpdf-converter
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -D qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes_rpc/policy/qubes.PdfConvert
+install -D qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes-rpc/policy/qubes.PdfConvert
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
-%config(noreplace) %attr(0664,root,qubes) /etc/qubes_rpc/policy/qubes.PdfConvert
+%config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.PdfConvert

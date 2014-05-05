@@ -51,7 +51,7 @@ The Qubes service for converting untrusted PDF files into trusted ones.
 rm -rf $RPM_BUILD_ROOT
 install -D qpdf-convert-client $RPM_BUILD_ROOT/usr/lib/qubes/qpdf-convert-client
 install -D qpdf-convert-server $RPM_BUILD_ROOT/usr/lib/qubes/qpdf-convert-server
-install -D -m 0644 qubes.PdfConvert $RPM_BUILD_ROOT/etc/qubes_rpc/qubes.PdfConvert
+install -D -m 0644 qubes.PdfConvert $RPM_BUILD_ROOT/etc/qubes-rpc/qubes.PdfConvert
 install -D qvm-convert-pdf $RPM_BUILD_ROOT/usr/bin/qvm-convert-pdf
 install -D qvm-convert-pdf.gnome $RPM_BUILD_ROOT/usr/lib/qubes/qvm-convert-pdf.gnome
 install -d $RPM_BUILD_ROOT/usr/share/file-manager/actions
@@ -66,5 +66,5 @@ rm -rf $RPM_BUILD_ROOT
 /usr/lib/qubes/qpdf-convert-server
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
-%attr(0644,root,root) /etc/qubes_rpc/qubes.PdfConvert
+%attr(0644,root,root) /etc/qubes-rpc/qubes.PdfConvert
 /usr/share/file-manager/actions/qvm-convert-pdf-gnome.desktop
