@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Action
-ToolbarLabel[C]=Convert to trusted PDF
-Name[C]=Convert to trusted PDF
-Profiles=profile-zero;
-
-[X-Action-Profile profile-zero]
-Exec=/usr/lib/qubes/qvm-convert-pdf.gnome %F
-Name[C]=Default profile
