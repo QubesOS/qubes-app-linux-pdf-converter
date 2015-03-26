@@ -1,3 +1,18 @@
+qubes-pdf-converter (2.0.3-1) wheezy; urgency=medium
+
+  [ Jason Mehring ]
+  * Removed nautilus-actions depend and replaced with nautilus-python
+  * debian: Added a Debian package for app-linux-pdf-converter
+  * Added .gitignore file to ignore rpm/ and deb/ directories
+
+  [ Marek Marczykowski-Górecki ]
+  * debian: Use DEBIAN_PARSER variable provided by builder
+
+  [ Jason Mehring ]
+  * wheezy: Change imagemagick to lowercase for wheezy
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 27 Mar 2015 00:35:36 +0100
+
 qubes-pdf-converter (2.0.2-1) unstable; urgency=low
 
   * Initial Release.
