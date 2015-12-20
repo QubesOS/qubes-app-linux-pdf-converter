@@ -37,6 +37,16 @@ if [ -n "$PROGRESS_FOR_GUI" ]; then
     VERBOSE=0;
 fi
 
+die() {
+    reason="$1"
+    if [ -n "$PROGRESS_FOR_GUI" ]; then
+        zenity --error --title="PDF conversion error" --text="$reason"
+    else
+        echo "$reason" > /dev/stderr
+    fi
+    exit 1
+}
+
 
 # Send the input (untrusted) file to the server...
 [ $VERBOSE -ge 1 ] && echo "-> Sending file to remote VM..." > /dev/stderr
@@ -56,8 +66,7 @@ exec >&-
 # First, get the no of pages:
 read NO_PAGES
 if [[ ! "$NO_PAGES" =~ ^[1-9][0-9]*$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES -gt $MAX_PAGES ]] ; then
-    echo "The remote party return invalid no of pages, aborting!" > /dev/stderr
-    exit 1
+    die "The remote party return invalid no of pages, aborting!"
 fi
 
 [ $VERBOSE -ge 1 ] && echo "-> Waiting for converted samples..." > /dev/stderr
@@ -74,14 +83,12 @@ while [ $PAGE -le $NO_PAGES ]; do
     fi
     if [[ ! "$IMG_WIDTH" =~ ^[1-9][0-9]*$ ]] || [ $IMG_WIDTH -le 0 ] || [ $IMG_WIDTH -gt $MAX_IMG_WIDTH ] || \
        [[ ! "$IMG_HEIGHT" =~ ^[1-9][0-9]*$ ]] || [ $IMG_HEIGHT -le 0 ] || [ $IMG_HEIGHT -gt $MAX_IMG_HEIGHT ]; then
-        echo "The remote party return invalid image geometry info, aborting!" > /dev/stderr
-        exit 2
+        die "The remote party return invalid image geometry info, aborting!"
     fi
     [ $VERBOSE -ge 2 ] && echo "--> page geometry: $IMG_WIDTH x $IMG_HEIGHT x $IMG_DEPTH" > /dev/stderr
     IMG_SIZE=$((IMG_WIDTH*IMG_HEIGHT*3))
     if [ $IMG_SIZE -le 0 ] || [ $IMG_SIZE -gt $MAX_IMG_SIZE ]; then
-        echo "Calculated image size is invalid, aborting!" > /dev/stderr
-        exit 2
+        die "Calculated image size is invalid, aborting!"
     fi
     # save the simplified RGB image into a temp PDF file:
     RGB_FILE=$RCVD_FILE-$PAGE.rgb
@@ -89,8 +96,7 @@ while [ $PAGE -le $NO_PAGES ]; do
     head -c $IMG_SIZE > $RGB_FILE
     RCVD_IMG_SIZE=$(stat -c %s $RGB_FILE)
     if [ $RCVD_IMG_SIZE -ne $IMG_SIZE ]; then
-        echo "The remote party return invalid no of bytes of the RGB file, aborting!" > /dev/stderr
-        exit 2
+        die "The remote party return invalid no of bytes of the RGB file, aborting!"
     fi
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
     convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE
