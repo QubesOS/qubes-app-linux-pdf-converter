@@ -99,7 +99,10 @@ while [ $PAGE -le $NO_PAGES ]; do
         die "The remote party return invalid no of bytes of the RGB file, aborting!"
     fi
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
-    convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE
+    convert_msgs=$(convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE 2>&1)
+    if [ $? -ne 0 ]; then
+        die "Page $PAGE conversion failed: $convert_msgs"
+    fi
     LIST_OF_PAGES="$LIST_OF_PAGES $PDF_FILE"
     rm -f $RGB_FILE
     [ $VERBOSE -ge 2 ] && echo "--> saved to file: $PDF_FILE" > /dev/stderr
@@ -113,12 +116,15 @@ if [ $VERBOSE -eq 1 ]; then
 fi
  
 [ $VERBOSE -ge 1 ] && echo "-> Merging pages into a single PDF document..." > /dev/stderr
-convert $LIST_OF_PAGES "$CONVERTED_FILE"
+convert_msgs=$(convert $LIST_OF_PAGES "$CONVERTED_FILE" 2>&1)
+if [ $? -ne 0 ]; then
+    die "Merging pages failed: $convert_msgs"
+fi
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
 mkdir -p $HOME/QubesUntrustedPDFs
 ORIG_FILE="$HOME/QubesUntrustedPDFs/`basename "$INPUT_FILE"`"
-mv "$INPUT_FILE" "${ORIG_FILE}"
+mv "$INPUT_FILE" "${ORIG_FILE}" || die "Moving original file failed"
 [ $VERBOSE -ge 1 ] && echo "-> Original file saved as $ORIG_FILE" > /dev/stderr
 
 # Cleanup
