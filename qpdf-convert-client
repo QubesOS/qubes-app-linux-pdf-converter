@@ -23,7 +23,7 @@
 
 INPUT_FILE="$1"
 RCVD_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
-CONVERTED_FILE="$(basename "$1" .pdf).trusted.pdf"
+CONVERTED_FILE="$(dirname "$1")/$(basename "$1" .pdf).trusted.pdf"
 
 
 MAX_PAGES=10000
