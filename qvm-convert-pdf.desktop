@@ -1,0 +1,11 @@
+[Desktop Entry]
+Actions=QvmConvertPdf;
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/pdf
+
+[Desktop Action QvmConvertPdf]
+Exec=/usr/lib/qubes/qvm-convert-pdf.gnome %U
+Icon=kget
+Name=Convert to trusted PDF
+

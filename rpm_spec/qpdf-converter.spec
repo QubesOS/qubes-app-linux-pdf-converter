@@ -62,3 +62,4 @@ rm -rf $RPM_BUILD_ROOT
 /usr/bin/qvm-convert-pdf
 %attr(0644,root,root) /etc/qubes-rpc/qubes.PdfConvert
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
+/usr/share/kde4/services/qvm-convert-pdf.desktop

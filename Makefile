@@ -83,5 +83,7 @@ install-vm:
 	install -D qvm-convert-pdf.gnome $(DESTDIR)/usr/lib/qubes/qvm-convert-pdf.gnome
 	install -d $(DESTDIR)/usr/share/nautilus-python/extensions
 	install -m 0755 qvm_convert_pdf_nautilus.py $(DESTDIR)/usr/share/nautilus-python/extensions
+	install -d $(DESTDIR)/usr/share/kde4/services
+	install -m 0644 qvm-convert-pdf.desktop $(DESTDIR)/usr/share/kde4/services
 
 clean:

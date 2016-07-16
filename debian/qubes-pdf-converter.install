@@ -4,5 +4,5 @@ etc/qubes-rpc/qubes.PdfConvert
 usr/bin/qvm-convert-pdf
 usr/lib/qubes/qvm-convert-pdf.gnome
 usr/share/nautilus-python/extensions
-usr/share/nautilus-python/extensions
 usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py
+usr/share/kde4/services/qvm-convert-pdf.desktop
