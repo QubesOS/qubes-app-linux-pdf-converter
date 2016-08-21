@@ -93,6 +93,7 @@ while [ $PAGE -le $NO_PAGES ]; do
     fi
     # save the simplified RGB image into a temp PDF file:
     RGB_FILE=$RCVD_FILE-$PAGE.rgb
+    PNG_FILE=$RCVD_FILE-$PAGE.png
     PDF_FILE=$RCVD_FILE-$PAGE.pdf
     head -c $IMG_SIZE > $RGB_FILE
     RCVD_IMG_SIZE=$(stat -c %s $RGB_FILE)
@@ -100,11 +101,19 @@ while [ $PAGE -le $NO_PAGES ]; do
         die "The remote party return invalid no of bytes of the RGB file, aborting!"
     fi
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
-    convert_msgs=$(convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE pdf:$PDF_FILE 2>&1)
+    # We first convert to a (comressed) PNG to create smaller output files
+    convert_msgs=$(convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE png:$PNG_FILE 2>&1)
     if [ $? -ne 0 ]; then
-        die "Page $PAGE conversion failed: $convert_msgs"
+        die "Page $PAGE conversion failed (RGB->PNG): $convert_msgs"
     fi
     rm -f $RGB_FILE
+
+    # now convert the (trusted but compressed) PNG into PDF for easy assembly...
+    convert_msgs=$(convert $PNG_FILE $PDF_FILE 2>&1)
+    if [ $? -ne 0 ]; then
+        die "Page $PAGE conversion failed (PNG->PDF): $convert_msgs"
+    fi
+    rm -f $PNG_FILE
 
     if [ $PAGE -gt 1 ]; then
         convert_msgs=$(pdfunite $CONVERTED_FILE $PDF_FILE $CONVERTED_FILE_PARTIAL 2>&1)
