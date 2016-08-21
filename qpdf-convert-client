@@ -50,17 +50,17 @@ die() {
 
 
 # Send the input (untrusted) file to the server...
-[ $VERBOSE -ge 1 ] && echo "-> Sending file to remote VM..." > /dev/stderr
+[ $VERBOSE -ge 1 ] && echo "-> Sending file to a Disposable VM..." > /dev/stderr
 cat "$INPUT_FILE"
 exec >&-
 
 # ... and get the recvd *simple* representation:
 
-# Note: the server might be comrpomised at this point so, it can very well send
+# Note: the server might be compromised at this point so, it can very well send
 # us something else than the simple representation.  Thus we explicitly specify
 # input format to ImageMagick's convert via "rgb:" prefix, forcing it to
 # interpret whatever stream of bytes it gets on input as a simple RGB array. We
-# hope that when using this RGB format explcitly (which is the simplest format
+# hope that when using this RGB format explicitly (which is the simplest format
 # for bitmaps in the known universe), there is no space for offending bug in
 # image parsing...
 
@@ -77,10 +77,10 @@ LIST_OF_PAGES=""
 while [ $PAGE -le $NO_PAGES ]; do
     read IMG_WIDTH IMG_HEIGHT
     if [ $VERBOSE -eq 1 ]; then
-        echo -n "-> Receving page $PAGE out of $NO_PAGES..." > /dev/stderr
+        echo -n "-> Receiving page $PAGE out of $NO_PAGES..." > /dev/stderr
         printf "\r" > /dev/stderr
     elif [ $VERBOSE -gt 1 ]; then    
-        echo "-> Receving page $PAGE out of $NO_PAGES..." > /dev/stderr
+        echo "-> Receiving page $PAGE out of $NO_PAGES..." > /dev/stderr
     fi
     if [[ ! "$IMG_WIDTH" =~ ^[1-9][0-9]*$ ]] || [ $IMG_WIDTH -le 0 ] || [ $IMG_WIDTH -gt $MAX_IMG_WIDTH ] || \
        [[ ! "$IMG_HEIGHT" =~ ^[1-9][0-9]*$ ]] || [ $IMG_HEIGHT -le 0 ] || [ $IMG_HEIGHT -gt $MAX_IMG_HEIGHT ]; then
@@ -101,7 +101,7 @@ while [ $PAGE -le $NO_PAGES ]; do
         die "The remote party return invalid no of bytes of the RGB file, aborting!"
     fi
     # here, the important part is that we *explicitly* specify RGB as the input format via "rgb:"
-    # We first convert to a (comressed) PNG to create smaller output files
+    # We first convert to a (compressed) PNG to create smaller output files
     convert_msgs=$(convert -size ${IMG_WIDTH}x${IMG_HEIGHT} -depth ${IMG_DEPTH} rgb:$RGB_FILE png:$PNG_FILE 2>&1)
     if [ $? -ne 0 ]; then
         die "Page $PAGE conversion failed (RGB->PNG): $convert_msgs"
