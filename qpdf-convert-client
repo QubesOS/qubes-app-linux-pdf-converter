@@ -24,7 +24,7 @@
 INPUT_FILE="$1"
 RCVD_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
 CONVERTED_FILE="$(dirname "$1")/$(basename "$1" .pdf).trusted.pdf"
-CONVERTED_FILE_PARTIAL="$CONVERTED_FILE.part.pdf"
+CONVERTED_FILE_PARTIAL="$CONVERTED_FILE".part.pdf
 
 
 MAX_PAGES=10000
@@ -116,13 +116,13 @@ while [ $PAGE -le $NO_PAGES ]; do
     rm -f $PNG_FILE
 
     if [ $PAGE -gt 1 ]; then
-        convert_msgs=$(pdfunite $CONVERTED_FILE $PDF_FILE $CONVERTED_FILE_PARTIAL 2>&1)
+        convert_msgs=$(pdfunite "$CONVERTED_FILE" $PDF_FILE "$CONVERTED_FILE_PARTIAL" 2>&1)
         if [ $? -ne 0 ]; then
             die "Error merging converted page: $convert_msgs"
         fi
-        mv $CONVERTED_FILE_PARTIAL $CONVERTED_FILE || die
+        mv "$CONVERTED_FILE_PARTIAL" "$CONVERTED_FILE" || die
     else
-        mv $PDF_FILE $CONVERTED_FILE || die
+        mv $PDF_FILE "$CONVERTED_FILE" || die
     fi
     rm -f $PDF_FILE || die
 
