@@ -24,6 +24,7 @@
 INPUT_FILE="$1"
 RCVD_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
 CONVERTED_FILE="$(dirname "$1")/$(basename "$1" .pdf).trusted.pdf"
+CONVERTED_FILE_PARTIAL="$CONVERTED_FILE.part.pdf"
 
 
 MAX_PAGES=10000
@@ -103,9 +104,19 @@ while [ $PAGE -le $NO_PAGES ]; do
     if [ $? -ne 0 ]; then
         die "Page $PAGE conversion failed: $convert_msgs"
     fi
-    LIST_OF_PAGES="$LIST_OF_PAGES $PDF_FILE"
     rm -f $RGB_FILE
-    [ $VERBOSE -ge 2 ] && echo "--> saved to file: $PDF_FILE" > /dev/stderr
+
+    if [ $PAGE -gt 1 ]; then
+        convert_msgs=$(pdfunite $CONVERTED_FILE $PDF_FILE $CONVERTED_FILE_PARTIAL 2>&1)
+        if [ $? -ne 0 ]; then
+            die "Error merging converted page: $convert_msgs"
+        fi
+        mv $CONVERTED_FILE_PARTIAL $CONVERTED_FILE || die
+    else
+        mv $PDF_FILE $CONVERTED_FILE || die
+    fi
+    rm -f $PDF_FILE || die
+
     PAGE=$(($PAGE+1))
 
     [ -n "$PROGRESS_FOR_GUI" ] && echo $((($PAGE-1)*90/$NO_PAGES)) >& $SAVED_FD_1
@@ -115,11 +126,6 @@ if [ $VERBOSE -eq 1 ]; then
     echo > /dev/stderr
 fi
  
-[ $VERBOSE -ge 1 ] && echo "-> Merging pages into a single PDF document..." > /dev/stderr
-convert_msgs=$(convert $LIST_OF_PAGES "$CONVERTED_FILE" 2>&1)
-if [ $? -ne 0 ]; then
-    die "Merging pages failed: $convert_msgs"
-fi
 [ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
 
 mkdir -p $HOME/QubesUntrustedPDFs
