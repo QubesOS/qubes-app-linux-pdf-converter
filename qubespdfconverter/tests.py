@@ -29,6 +29,19 @@ import qubes.tests.extra
 
 # noinspection PyPep8Naming
 class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
+    circle_svg = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
+<svg width="9cm" height="11cm" viewBox="33 27 179 210" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g>
+    <ellipse style="fill: #ffffff" cx="133" cy="107" rx="78.0001" ry="78.0001"/>
+    <ellipse style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" cx="133" cy="107" rx="78.0001" ry="78.0001"/>
+  </g>
+  <text font-size="12" style="fill: #000000;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="34" y="234">
+    <tspan x="34" y="234">{text}</tspan>
+  </text>
+</svg>
+    """
+
     def setUp(self):
         super(TC_00_PDFConverter, self).setUp()
         # noinspection PyAttributeOutsideInit
@@ -43,10 +56,11 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         '''
         for (page_content, page_no) in zip(content, itertools.count()):
             p = self.vm.run(
-                'cat > /tmp/page{no:04}.txt && '
-                'convert /tmp/page{no:04}.txt /tmp/page{no:04}.pdf 2>&1'.format(
+                'cat > /tmp/page{no:04}.svg && '
+                'convert /tmp/page{no:04}.svg /tmp/page{no:04}.pdf 2>&1'.format(
                     no=page_no), passio_popen=True)
-            (stdout, _) = p.communicate(page_content)
+            (stdout, _) = p.communicate(self.circle_svg.format(
+                text=page_content))
             if p.returncode != 0:
                 self.skipTest('failed to create test page: {}'.format(stdout))
 
