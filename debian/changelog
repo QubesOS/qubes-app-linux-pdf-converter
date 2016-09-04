@@ -1,3 +1,20 @@
+qubes-pdf-converter (2.1.1-1) wheezy; urgency=medium
+
+  [ Joanna Rutkowska ]
+  * Improve converted pages merging algorithm, use pdfunite instead of
+    convert.
+  * Introduce compression of the rcvd RGB bitmaps
+  * Add README.md
+  * Fix spellings
+  * version 2.1.0
+  * Properly quote filename which are provided by the user
+
+  [ Marek Marczykowski-Górecki ]
+  * Add tests
+  * tests: synthesize test.pdf from SVG instead of txt
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sun, 04 Sep 2016 19:56:52 +0200
+
 qubes-pdf-converter (2.0.5-1) wheezy; urgency=medium
 
   * travis: initial version
