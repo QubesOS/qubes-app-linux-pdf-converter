@@ -47,9 +47,13 @@ Qubes policy for qpdf-converter
 %install
 rm -rf $RPM_BUILD_ROOT
 install -D qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes-rpc/policy/qubes.PdfConvert
+make install-dom0 DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
 %config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.PdfConvert
+%dir %{python_sitelib}/qubespdfconverter-*.egg-info
+%{python_sitelib}/qubespdfconverter-*.egg-info/*
+%{python_sitelib}/qubespdfconverter
