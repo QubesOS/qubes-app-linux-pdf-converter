@@ -6,3 +6,4 @@ usr/lib/qubes/qvm-convert-pdf.gnome
 usr/share/nautilus-python/extensions
 usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py
 usr/share/kde4/services/qvm-convert-pdf.desktop
+usr/share/man/man1/qvm-convert-pdf.1.gz
