@@ -74,8 +74,10 @@ update-repo-installer:
 	ln -f $(RPMS_DIR)/x86_64/qubes-pdf-converter-dom0-*$(VERSION)*.rpm ../installer/yum/qubes-dom0/rpm/
 
 build:
+	make manpages -C doc
 
 install-vm:
+	make install -C doc
 	install -D -m 0644 qubes.PdfConvert $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf $(DESTDIR)/usr/bin/qvm-convert-pdf
 	install -D qpdf-convert-client $(DESTDIR)/usr/lib/qubes/qpdf-convert-client

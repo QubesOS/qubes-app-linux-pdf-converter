@@ -34,6 +34,8 @@ Vendor:		Invisible Things Lab
 License:	GPL
 URL:		http://www.qubes-os.org
 
+BuildRequires: pandoc 
+
 Requires:	poppler-utils ImageMagick
 Requires:	nautilus-python
 
@@ -63,3 +65,4 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0644,root,root) /etc/qubes-rpc/qubes.PdfConvert
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
 /usr/share/kde4/services/qvm-convert-pdf.desktop
+%{_mandir}/man1/qvm-convert-pdf.1*
