@@ -1,3 +1,14 @@
+qubes-pdf-converter (2.1.2-1) unstable; urgency=medium
+
+  [ Marek Marczykowski-Górecki ]
+  * rpm: add missing BR: python-setuptools
+
+  [ Nicklaus McClendon ]
+  * Removed .travis.yml debootstrap fix
+  * Added qvm-convert-pdf manpage
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Tue, 07 Mar 2017 03:35:30 +0100
+
 qubes-pdf-converter (2.1.1-1) wheezy; urgency=medium
 
   [ Joanna Rutkowska ]
