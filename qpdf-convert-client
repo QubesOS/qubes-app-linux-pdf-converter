@@ -43,14 +43,14 @@ die() {
     if [ -n "$PROGRESS_FOR_GUI" ]; then
         zenity --error --title="PDF conversion error" --text="$reason"
     else
-        echo "$reason" > /dev/stderr
+        echo "$reason" >&2
     fi
     exit 1
 }
 
 
 # Send the input (untrusted) file to the server...
-[ $VERBOSE -ge 1 ] && echo "-> Sending file to a Disposable VM..." > /dev/stderr
+[ $VERBOSE -ge 1 ] && echo "-> Sending file to a Disposable VM..." >&2
 cat "$INPUT_FILE"
 exec >&-
 
@@ -70,23 +70,23 @@ if [[ ! "$NO_PAGES" =~ ^[1-9][0-9]*$ ]] || [[ $NO_PAGES -le 0 ]] || [[ $NO_PAGES
     die "The remote party return invalid no of pages, aborting!"
 fi
 
-[ $VERBOSE -ge 1 ] && echo "-> Waiting for converted samples..." > /dev/stderr
+[ $VERBOSE -ge 1 ] && echo "-> Waiting for converted samples..." >&2
 
 PAGE=1
 LIST_OF_PAGES=""
 while [ $PAGE -le $NO_PAGES ]; do
     read IMG_WIDTH IMG_HEIGHT
     if [ $VERBOSE -eq 1 ]; then
-        echo -n "-> Receiving page $PAGE out of $NO_PAGES..." > /dev/stderr
-        printf "\r" > /dev/stderr
+        echo -n "-> Receiving page $PAGE out of $NO_PAGES..." >&2
+        printf "\r" >&2
     elif [ $VERBOSE -gt 1 ]; then    
-        echo "-> Receiving page $PAGE out of $NO_PAGES..." > /dev/stderr
+        echo "-> Receiving page $PAGE out of $NO_PAGES..." >&2
     fi
     if [[ ! "$IMG_WIDTH" =~ ^[1-9][0-9]*$ ]] || [ $IMG_WIDTH -le 0 ] || [ $IMG_WIDTH -gt $MAX_IMG_WIDTH ] || \
        [[ ! "$IMG_HEIGHT" =~ ^[1-9][0-9]*$ ]] || [ $IMG_HEIGHT -le 0 ] || [ $IMG_HEIGHT -gt $MAX_IMG_HEIGHT ]; then
         die "The remote party return invalid image geometry info, aborting!"
     fi
-    [ $VERBOSE -ge 2 ] && echo "--> page geometry: $IMG_WIDTH x $IMG_HEIGHT x $IMG_DEPTH" > /dev/stderr
+    [ $VERBOSE -ge 2 ] && echo "--> page geometry: $IMG_WIDTH x $IMG_HEIGHT x $IMG_DEPTH" >&2
     IMG_SIZE=$((IMG_WIDTH*IMG_HEIGHT*3))
     if [ $IMG_SIZE -le 0 ] || [ $IMG_SIZE -gt $MAX_IMG_SIZE ]; then
         die "Calculated image size is invalid, aborting!"
@@ -132,15 +132,15 @@ while [ $PAGE -le $NO_PAGES ]; do
 done
 
 if [ $VERBOSE -eq 1 ]; then
-    echo > /dev/stderr
+    echo >&2
 fi
  
-[ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" > /dev/stderr
+[ $VERBOSE -ge 1 ] && echo "-> Converted PDF saved as: $CONVERTED_FILE" >&2
 
 mkdir -p $HOME/QubesUntrustedPDFs
 ORIG_FILE="$HOME/QubesUntrustedPDFs/`basename "$INPUT_FILE"`"
 mv "$INPUT_FILE" "${ORIG_FILE}" || die "Moving original file failed"
-[ $VERBOSE -ge 1 ] && echo "-> Original file saved as $ORIG_FILE" > /dev/stderr
+[ $VERBOSE -ge 1 ] && echo "-> Original file saved as $ORIG_FILE" >&2
 
 # Cleanup
 rm -f $RCVD_FILE*
