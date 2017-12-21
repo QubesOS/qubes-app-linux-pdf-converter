@@ -18,3 +18,8 @@ env:
  - DISTS_VM=fc26 USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
  - DISTS_VM=jessie USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
  - DISTS_VM=stretch USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
+
+jobs:
+  include:
+    - script:
+      - shellcheck qpdf-convert-client qpdf-convert-server
