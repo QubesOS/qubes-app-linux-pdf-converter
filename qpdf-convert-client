@@ -145,3 +145,4 @@ mv "$INPUT_FILE" "${ORIG_FILE}" || die "Moving original file failed"
 # Cleanup
 rm -f $RCVD_FILE*
 [ -n "$PROGRESS_FOR_GUI" ] && echo "100" >& $SAVED_FD_1
+exit 0
