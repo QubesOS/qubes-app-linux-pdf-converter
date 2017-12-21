@@ -34,7 +34,8 @@ Vendor:		Invisible Things Lab
 License:	GPL
 URL:		http://www.qubes-os.org
 
-BuildRequires: python-setuptools
+BuildRequires: python2-devel
+BuildRequires: python3-devel
 
 %define _builddir %(pwd)
 
@@ -59,3 +60,6 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{python_sitelib}/qubespdfconverter-*.egg-info
 %{python_sitelib}/qubespdfconverter-*.egg-info/*
 %{python_sitelib}/qubespdfconverter
+%dir %{python3_sitelib}/qubespdfconverter-*.egg-info
+%{python3_sitelib}/qubespdfconverter-*.egg-info/*
+%{python3_sitelib}/qubespdfconverter

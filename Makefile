@@ -89,6 +89,7 @@ install-vm:
 	install -m 0644 qvm-convert-pdf.desktop $(DESTDIR)/usr/share/kde4/services
 
 install-dom0:
-	python setup.py install -O1 --root $(DESTDIR)
+	python2 setup.py install -O1 --root $(DESTDIR)
+	python3 setup.py install -O1 --root $(DESTDIR)
 
 clean:
