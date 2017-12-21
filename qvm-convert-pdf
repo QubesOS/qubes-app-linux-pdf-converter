@@ -25,4 +25,4 @@ if [ $# -ne 1 ] ; then
 	exit 1
 fi
 
-exec /usr/lib/qubes/qrexec_client_vm '$dispvm' qubes.PdfConvert /usr/lib/qubes/qpdf-convert-client "$@"
+exec /usr/bin/qrexec-client-vm '$dispvm' qubes.PdfConvert /usr/lib/qubes/qpdf-convert-client "$@"
