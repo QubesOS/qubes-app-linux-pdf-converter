@@ -28,7 +28,7 @@ TEMP_RGB_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX.pdf)
 IMG_DEPTH=8
 
 # Get the original (untrusted) PDF file...
-cat > $INPUT_FILE
+cat > "$INPUT_FILE"
 
 # now, let's convert it into a simple representation,
 # and send back to the client.
@@ -39,30 +39,30 @@ cat > $INPUT_FILE
 # never trust what we're sending back, and should discard anything that doesn't
 # look like the simple representation!
 
-NO_PAGES=$(pdfinfo $INPUT_FILE | grep "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
-if [ -z $NO_PAGES ]; then
+NO_PAGES=$(pdfinfo "$INPUT_FILE" | grep -a "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
+if [ -z "$NO_PAGES" ]; then
     # Perhaps this is not a PDF, only some JPG/PNG/etc? Let's try it anyway...
     NO_PAGES=1
 fi
 echo $NO_PAGES
 
-cd /tmp
+cd /tmp || exit 1
 PAGE=1
 while [ $PAGE -le $NO_PAGES ]; do
     # if pdftocairo fails, lets try the ImageMagick's convert -- perhaps this is just some img file?
-    pdftocairo $INPUT_FILE -png -f $PAGE -l $PAGE -singlefile $(basename $TEMP_PNG_FILE .png) || \
-        convert $INPUT_FILE png:$TEMP_PNG_FILE
-    IMG_WIDTH=$(identify -format "%w" $TEMP_PNG_FILE)
-    IMG_HEIGHT=$(identify -format "%h" $TEMP_PNG_FILE)
-    convert $TEMP_PNG_FILE -depth $IMG_DEPTH rgb:$TEMP_RGB_FILE
+    pdftocairo "$INPUT_FILE" -png -f $PAGE -l $PAGE -singlefile "$(basename "$TEMP_PNG_FILE" .png)" || \
+        convert "$INPUT_FILE" png:"$TEMP_PNG_FILE"
+    IMG_WIDTH=$(identify -format "%w" "$TEMP_PNG_FILE")
+    IMG_HEIGHT=$(identify -format "%h" "$TEMP_PNG_FILE")
+    convert "$TEMP_PNG_FILE" -depth $IMG_DEPTH rgb:"$TEMP_RGB_FILE"
     echo "$IMG_WIDTH $IMG_HEIGHT"
-    cat $TEMP_RGB_FILE
-    PAGE=$(($PAGE+1))
+    cat "$TEMP_RGB_FILE"
+    PAGE=$((PAGE + 1))
 done
 
 # Cleanup tmp files...
 # Note: our DispVM might get destroyed before the commands below
 # complete, but that doesn't hurt us, because this is... well a DispVM.
-rm -f $INPUT_FILE
-rm -f $TEMP_PNG_FILE
-rm -f $TEMP_RGB_FILE
+rm -f "$INPUT_FILE"
+rm -f "$TEMP_PNG_FILE"
+rm -f "$TEMP_RGB_FILE"
