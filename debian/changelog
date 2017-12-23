@@ -1,3 +1,16 @@
+qubes-pdf-converter (2.1.3-1) unstable; urgency=medium
+
+  * travis: add fc25 build
+  * travis: drop 3.1, add 4.0 and fc26 builds
+  * Use POSIX standard >&2 redirection for stderr
+  * Exit with code 0 on success
+  * tests: make them python3 compatible
+  * Apply shellcheck hints
+  * travis: run shellcheck
+  * Update qrexec-client-vm localtion
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sat, 23 Dec 2017 02:56:21 +0100
+
 qubes-pdf-converter (2.1.2-1) unstable; urgency=medium
 
   [ Marek Marczykowski-Górecki ]
