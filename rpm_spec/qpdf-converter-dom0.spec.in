@@ -22,47 +22,41 @@
 #
 #
 
-%{!?version: %define version %(cat version)}
 
-Name:		qubes-pdf-converter
-Version:	%{version}
+Name:		qubes-pdf-converter-dom0
+Version:	@VERSION@
 Release:	1%{dist}
-Summary:	The Qubes service for converting untrusted PDF files into trusted ones
+Summary:    Qubes policy for qpdf-converter
 
 Group:		Qubes
 Vendor:		Invisible Things Lab
 License:	GPL
 URL:		http://www.qubes-os.org
 
-BuildRequires: pandoc 
+BuildRequires: python2-devel
+BuildRequires: python3-devel
 
-Requires:	poppler-utils ImageMagick
-Requires:	nautilus-python
-
-%define _builddir %(pwd)
+Source0: %{name}-%{version}.tar.gz
 
 %description
-The Qubes service for converting untrusted PDF files into trusted ones.
+Qubes policy for qpdf-converter
 
 %prep
-# we operate on the current directory, so no need to unpack anything
-
-%build
+%setup -q
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-vm DESTDIR=$RPM_BUILD_ROOT
+install -D qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes-rpc/policy/qubes.PdfConvert
+make install-dom0 DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
-%defattr(-,root,root,-)
-/usr/lib/qubes/qpdf-convert-client
-/usr/lib/qubes/qpdf-convert-server
-/usr/lib/qubes/qvm-convert-pdf.gnome
-/usr/bin/qvm-convert-pdf
-%attr(0644,root,root) /etc/qubes-rpc/qubes.PdfConvert
-/usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
-/usr/share/kde4/services/qvm-convert-pdf.desktop
-%{_mandir}/man1/qvm-convert-pdf.1*
+%config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.PdfConvert
+%dir %{python_sitelib}/qubespdfconverter-*.egg-info
+%{python_sitelib}/qubespdfconverter-*.egg-info/*
+%{python_sitelib}/qubespdfconverter
+%dir %{python3_sitelib}/qubespdfconverter-*.egg-info
+%{python3_sitelib}/qubespdfconverter-*.egg-info/*
+%{python3_sitelib}/qubespdfconverter
