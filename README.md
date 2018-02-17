@@ -7,7 +7,7 @@ Disposable VMs to perform conversion of potentially untrusted (e.g. maliciously
 malformed) PDF files into safe-to-view PDF files.
 
 This is done by having the Disposable VM perform the complex (and potentially
-buggy) rendering of the PDF in question) and sending the resulting RGB bitmap
+buggy) rendering of the PDF in question and sending the resulting RGB bitmap
 (simple representation) to the client AppVM. The client AppVM can _trivially_
 verify the received data are indeed the simple representation, and then
 construct a new PDF out of the received bitmap. Of course the price we pay for
