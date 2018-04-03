@@ -60,3 +60,6 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info
 %{python3_sitelib}/qubespdfconverter-*.egg-info/*
 %{python3_sitelib}/qubespdfconverter
+
+%changelog
+@CHANGELOG@
