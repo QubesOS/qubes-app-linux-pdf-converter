@@ -1,3 +1,14 @@
+qubes-pdf-converter (2.1.4-1) unstable; urgency=medium
+
+  [ Frédéric Pierret ]
+  * Create .spec.in and Source0
+  * spec.in: add changelog placeholder
+
+  [ Marek Marczykowski-Górecki ]
+  * travis: update fedora versions
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 04 May 2018 02:31:58 +0200
+
 qubes-pdf-converter (2.1.3-1) unstable; urgency=medium
 
   * travis: add fc25 build
