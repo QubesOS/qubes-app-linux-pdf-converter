@@ -43,6 +43,8 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
     """
 
     def setUp(self):
+        if 'whonix' in self.template:
+            self.skipTest('whonix do not have pdf converter installed')
         super(TC_00_PDFConverter, self).setUp()
         # noinspection PyAttributeOutsideInit
         self.vm = self.create_vms(["vm"])[0]
