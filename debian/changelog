@@ -1,3 +1,10 @@
+qubes-pdf-converter (2.1.5-1) unstable; urgency=medium
+
+  * tests: skip tests on Whonix - the pdf converter is not installed
+    there
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Tue, 09 Oct 2018 02:54:08 +0200
+
 qubes-pdf-converter (2.1.4-1) unstable; urgency=medium
 
   [ Frédéric Pierret ]
