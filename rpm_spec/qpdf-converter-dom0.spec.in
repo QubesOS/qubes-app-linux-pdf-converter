@@ -54,9 +54,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.PdfConvert
-%dir %{python_sitelib}/qubespdfconverter-*.egg-info
-%{python_sitelib}/qubespdfconverter-*.egg-info/*
-%{python_sitelib}/qubespdfconverter
+%dir %{python2_sitelib}/qubespdfconverter-*.egg-info
+%{python2_sitelib}/qubespdfconverter-*.egg-info/*
+%{python2_sitelib}/qubespdfconverter
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info
 %{python3_sitelib}/qubespdfconverter-*.egg-info/*
 %{python3_sitelib}/qubespdfconverter
