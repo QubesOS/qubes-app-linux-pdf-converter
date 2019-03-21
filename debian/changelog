@@ -1,3 +1,11 @@
+qubes-pdf-converter (2.1.6-1) unstable; urgency=medium
+
+  * debian: don't create orig.tar.gz manually
+  * rpm: use explicit versioned python macros
+  * travis: update to R4.1
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 22 Mar 2019 00:16:22 +0100
+
 qubes-pdf-converter (2.1.5-1) unstable; urgency=medium
 
   * tests: skip tests on Whonix - the pdf converter is not installed
