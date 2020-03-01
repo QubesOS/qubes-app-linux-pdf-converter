@@ -1,3 +1,16 @@
+qubes-pdf-converter (2.1.7-1) unstable; urgency=medium
+
+  [ Frédéric Pierret (fepitre) ]
+  * travis: switch to bionic
+  * travis: switch to dom0 Fedora 31
+
+  [ Marek Marczykowski-Górecki ]
+  * Replace /etc/qubes-rpc/qubes.PdfConvert with a symlink
+  * Don't make the qrexec policy executable
+  * travis: refresh distributions versions
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sun, 01 Mar 2020 20:41:05 +0100
+
 qubes-pdf-converter (2.1.6-1) unstable; urgency=medium
 
   * debian: don't create orig.tar.gz manually
