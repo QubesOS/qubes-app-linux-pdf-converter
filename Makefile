@@ -78,10 +78,11 @@ build:
 
 install-vm:
 	make install -C doc
-	install -D -m 0644 qubes.PdfConvert $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf $(DESTDIR)/usr/bin/qvm-convert-pdf
 	install -D qpdf-convert-client $(DESTDIR)/usr/lib/qubes/qpdf-convert-client
 	install -D qpdf-convert-server $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
+	install -d $(DESTDIR)/etc/qubes-rpc
+	ln -s ../../usr/lib/qubes/qpdf-convert-server $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf.gnome $(DESTDIR)/usr/lib/qubes/qvm-convert-pdf.gnome
 	install -d $(DESTDIR)/usr/share/nautilus-python/extensions
 	install -m 0755 qvm_convert_pdf_nautilus.py $(DESTDIR)/usr/share/nautilus-python/extensions

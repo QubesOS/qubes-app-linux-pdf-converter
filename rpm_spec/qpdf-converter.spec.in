@@ -55,11 +55,11 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
+/etc/qubes-rpc/qubes.PdfConvert
 /usr/lib/qubes/qpdf-convert-client
 /usr/lib/qubes/qpdf-convert-server
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
-%attr(0644,root,root) /etc/qubes-rpc/qubes.PdfConvert
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
 /usr/share/kde4/services/qvm-convert-pdf.desktop
 %{_mandir}/man1/qvm-convert-pdf.1*
