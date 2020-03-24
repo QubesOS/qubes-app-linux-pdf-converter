@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env python3
 #
 # The Qubes OS Project, http://www.qubes-os.org
 #
@@ -20,9 +20,67 @@
 #
 #
 
-if [ $# -ne 1 ] ; then
-	echo usage: $0 '<pdf to convert>'
-	exit 1
-fi
+import argparse
+import os
+import sys
 
-exec /usr/bin/qrexec-client-vm '$dispvm' qubes.PdfConvert /usr/lib/qubes/qpdf-convert-client "$@"
+PROG_NAME = os.path.basename(sys.argv[0])
+QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
+
+def version():
+    print(f'{PROG_NAME} version 0.1')
+    sys.exit(0)
+
+class ArgumentParser(argparse.ArgumentParser):
+    '''Overriding class for custom help message.'''
+    def print_help(self):
+        print(f'''usage: {PROG_NAME} [OPTIONS ...] [FILE ...]
+
+Options:
+   --help      Show this help message and exit.
+   --version   Show version information and exit.''')
+        sys.exit(0)
+
+def parser_new():
+    '''Create a command-line parser
+
+    :rtype: tuple
+    '''
+    parser = ArgumentParser()
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+
+    parser.add_argument('--version', action='store_true', default=False)
+
+    return parser.parse_known_args()
+
+def parse_args(args):
+    if args.version:
+        version()
+
+def check_pdf_paths(untrusted_pdfs):
+    for untrusted_pdf in untrusted_pdfs:
+        if not os.path.exists(untrusted_pdf):
+            print(f'"{untrusted_pdf}": No such file')
+            sys.exit(1)
+
+def main():
+    args, untrusted_pdfs = parser_new()
+    parse_args(args)
+    check_pdf_paths(untrusted_pdfs)
+
+    # ? Flush since we're not coming back from os.execvp()
+    # sys.stdin.flush()
+    # sys.stdout.flush()
+    # sys.stderr.flush()
+
+    # TODO: Pass in our multiple files
+    os.execvp(QREXEC_CLIENT, (QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
+                              '/usr/lib/qubes/qpdf-convert-client', sys.argv[1]))
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt as e:
+        sys.exit(0)
