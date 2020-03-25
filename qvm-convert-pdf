@@ -76,7 +76,6 @@ def main():
                               *untrusted_pdfs])
 
 if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt as e:
-        sys.exit(0)
+    # No need to wrap this in a try block since we're
+    # never returning from execl()
+    main()
