@@ -70,14 +70,10 @@ def main():
     parse_args(args)
     check_pdf_paths(untrusted_pdfs)
 
-    # ? Flush since we're not coming back from os.execvp()
-    # sys.stdin.flush()
-    # sys.stdout.flush()
-    # sys.stderr.flush()
-
-    # TODO: Pass in our multiple files
-    os.execvp(QREXEC_CLIENT, (QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
-                              '/usr/lib/qubes/qpdf-convert-client', sys.argv[1]))
+    # TODO: Handle os.execl() error (maybe with os._exit(127)
+    os.execvp(QREXEC_CLIENT, [QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
+                              '/usr/lib/qubes/qpdf-convert-client',
+                              *untrusted_pdfs])
 
 if __name__ == '__main__':
     try:
