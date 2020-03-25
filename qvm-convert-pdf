@@ -21,24 +21,23 @@
 #
 
 import argparse
+import logging
 import os
 import sys
 
 PROG_NAME = os.path.basename(sys.argv[0])
 QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
 
-def version():
-    print(f'{PROG_NAME} version 0.1')
-    sys.exit(0)
+logging.basicConfig(level=logging.INFO, stream=sys.stderr,
+                    format='%(module)s (%(levelname)s): %(message)s')
 
 class ArgumentParser(argparse.ArgumentParser):
     '''Overriding class for custom help message.'''
     def print_help(self):
-        print(f'''usage: {PROG_NAME} [OPTIONS ...] [FILE ...]
+        print(f'''usage: {PROG_NAME} [OPTIONS ...] FILE
 
 Options:
-   --help      Show this help message and exit.
-   --version   Show version information and exit.''')
+   --help      Show this help message and exit.''')
         sys.exit(0)
 
 def parser_new():
@@ -51,18 +50,19 @@ def parser_new():
     if len(sys.argv) == 1:
         parser.print_help()
 
-    parser.add_argument('--version', action='store_true', default=False)
+    # parser.add_argument('-v', '--verbose', action='count', default=0)
 
     return parser.parse_known_args()
 
 def parse_args(args):
-    if args.version:
-        version()
+    # if args.version:
+        # version()
+    return
 
 def check_pdf_paths(untrusted_pdfs):
     for untrusted_pdf in untrusted_pdfs:
         if not os.path.exists(untrusted_pdf):
-            print(f'"{untrusted_pdf}": No such file')
+            logging.error(f'"{untrusted_pdf}": No such file')
             sys.exit(1)
 
 def main():
