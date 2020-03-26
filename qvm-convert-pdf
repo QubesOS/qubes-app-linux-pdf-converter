@@ -21,15 +21,11 @@
 #
 
 import argparse
-import logging
 import os
 import sys
 
 PROG_NAME = os.path.basename(sys.argv[0])
 QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
-
-logging.basicConfig(level=logging.INFO, stream=sys.stderr,
-                    format='%(module)s (%(levelname)s): %(message)s')
 
 class ArgumentParser(argparse.ArgumentParser):
     '''Overriding class for custom help message.'''
@@ -62,7 +58,7 @@ def parse_args(args):
 def check_pdf_paths(untrusted_pdfs):
     for untrusted_pdf in untrusted_pdfs:
         if not os.path.exists(untrusted_pdf):
-            logging.error(f'"{untrusted_pdf}": No such file')
+            print(f'"{untrusted_pdf}": No such file')
             sys.exit(1)
 
 def main():
