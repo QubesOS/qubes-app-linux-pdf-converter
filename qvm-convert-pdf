@@ -74,20 +74,24 @@ def parse_args(args):
 def check_pdf_paths(untrusted_pdfs):
     for untrusted_pdf in untrusted_pdfs:
         if not os.path.exists(untrusted_pdf):
-            print(f'"{untrusted_pdf}": No such file')
-            sys.exit(1)
+            die(f'{untrusted_pdf}: No such file')
+
+
+###############################
+#           Main
+###############################
 
 def main():
+    # TODO: Move parsing into qpdf-convert-client
     args, untrusted_pdfs = parser_new()
     parse_args(args)
     check_pdf_paths(untrusted_pdfs)
 
     # TODO: Handle os.execl() error (maybe with os._exit(127)
-    os.execvp(QREXEC_CLIENT, [QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
-                              '/usr/lib/qubes/qpdf-convert-client',
-                              *untrusted_pdfs])
+    cmd = [QREXEC_CLIENT, 'disp8051', 'qubes.PdfConvert',
+           '/usr/lib/qubes/qpdf-convert-client', *untrusted_pdfs]
+    os.execvp(QREXEC_CLIENT, cmd)
 
 if __name__ == '__main__':
-    # No need to wrap this in a try block since we're
-    # never returning from execl()
+    # No need to wrap this in a try block since we never return from execl()
     main()
