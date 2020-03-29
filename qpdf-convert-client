@@ -42,9 +42,28 @@ logging.basicConfig(format='%(message)s', stream=sys.stderr)
 #         Utilities
 ###############################
 
+def info(msg, suffix=None):
+    print(msg, end=suffix, flush=True, file=sys.stderr)
+
+def die(msg):
+    logging.error(msg)
+    sys.exit(1)
+
+def send(data):
+    print(data, flush=True)
+
+def send_b(data):
+    sys.stdout.buffer.write(data)
+
+def recv():
+    return input()
+
+def recv_b():
+    return sys.stdin.buffer.read()
+
 def check_range(val, upper):
     if (not 1 <= val <= upper) or (not 1 <= val <= upper):
-            raise ValueError
+        raise ValueError
 
 
 ###############################
