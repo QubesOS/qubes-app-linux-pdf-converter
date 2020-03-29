@@ -21,11 +21,27 @@
 #
 
 import argparse
+import logging
 import os
 import sys
 
 PROG_NAME = os.path.basename(sys.argv[0])
 QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
+
+
+###############################
+#         Utilities
+###############################
+
+def die(msg):
+    logging.basicConfig(format='%(message)s', stream=sys.stderr)
+    logging.error(msg)
+    sys.exit(1)
+
+
+###############################
+#          Parsing
+###############################
 
 class ArgumentParser(argparse.ArgumentParser):
     '''Overriding class for custom help message.'''

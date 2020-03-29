@@ -20,6 +20,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from collections import namedtuple
+import logging
 import os
 from PIL import Image
 import subprocess
@@ -33,6 +34,8 @@ MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
 MAX_IMG_SIZE = MAX_IMG_WIDTH * MAX_IMG_HEIGHT * 3
+
+logging.basicConfig(format='%(message)s', stream=sys.stderr)
 
 
 ###############################
