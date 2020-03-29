@@ -34,6 +34,7 @@ QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
 ###############################
 
 def die(msg):
+    '''Qrexec wrapper for displaying error messages'''
     logging.basicConfig(format='%(message)s', stream=sys.stderr)
     logging.error(msg)
     sys.exit(1)
@@ -46,17 +47,14 @@ def die(msg):
 class ArgumentParser(argparse.ArgumentParser):
     '''Overriding class for custom help message.'''
     def print_help(self):
-        print(f'''usage: {PROG_NAME} [OPTIONS ...] FILE
+        print(f'''\
+usage: {PROG_NAME} [OPTIONS ...] FILE
 
 Options:
    --help      Show this help message and exit.''')
         sys.exit(0)
 
 def parser_new():
-    '''Create a command-line parser
-
-    :rtype: tuple
-    '''
     parser = ArgumentParser()
 
     if len(sys.argv) == 1:
