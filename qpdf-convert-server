@@ -149,11 +149,11 @@ def get_page_count(pdf_path):
     cmd = ['pdfinfo', pdf_path]
 
     try:
-        output = subprocess.check_output(cmd)
+        output = subprocess.check_output(cmd, text=True)
     except subprocess.CalledProcessError:
         info(f'Probably not a PDF...')
     else:
-        for line in output.decode().splitlines():
+        for line in output.splitlines():
             if 'Pages:' in line:
                 pages = int(line.split(':')[1])
 
