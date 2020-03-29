@@ -25,7 +25,7 @@ import os
 from PIL import Image
 import subprocess
 import sys
-import tempfile
+from tempfile import NamedTemporaryFile
 
 PROG_NAME = os.path.basename(sys.argv[0])
 ARCHIVE_PATH = f"{os.path.expanduser('~')}/QubesUntrustedPDFs"
@@ -67,50 +67,36 @@ def check_range(val, upper):
 
 
 ###############################
-#       Files & Images
+#        Image-related
 ###############################
 
-def receive_page_count():
-    # TODO: Can't the # of pages be modified by a malicious server?
-    try:
-        page_count = int(input())
-        check_range(page_count, MAX_PAGES)
-    except ValueError as err:
-        print("Invalid number of pages returned... aborting!", file=sys.stderr)
-        sys.exit(1)
+def recv_measurements():
+    return (int(val) for val in recv().split(' ', 2))
 
-    return page_count
-
-def receive_img_measurements():
-    return (int(val) for val in input().split(' ', 2))
-
-def get_img_size(width, height):
+def get_size(width, height):
     size = width * height * 3
 
     if size > MAX_IMG_SIZE:
-        print("Calculated image size is too large... aborting!",
-               file=sys.stderr)
-        sys.exit(1)
+        die("Calculated image size is too large... aborting!")
 
     return size
 
-def get_img_dimensions():
+def get_dimensions():
     depth = 8
 
     try:
-        width, height = receive_img_measurements()
+        width, height = recv_measurements()
         check_range(width, MAX_IMG_WIDTH)
         check_range(height, MAX_IMG_HEIGHT)
-    except ValueError as err:
-        print("Invalid image geometry returned... aborting!", file=sys.stderr)
-        sys.exit(1)
+    except ValueError:
+        die("Invalid image geometry returned... aborting!")
 
-    size = get_img_size(width, height)
+    size = get_size(width, height)
+    Dimensions = namedtuple('Dimensions', ['width', 'height', 'depth', 'size'])
 
-    Dimensions = namedtuple('Dimensions', 'width height depth size')
     return Dimensions(width=width, height=height, size=size, depth=depth)
 
-def get_tmp_rgb(rgb_path, size):
+def recv_rgb(rgb_path, size):
     # XXX: For some reason, this leaves us missing alot of bytes
     # rcvd_bytes = input().encode('utf-8', 'surrogateescape')
     # rcvd_bytes = rcvd_bytes[:dimensions.size]
@@ -125,55 +111,78 @@ def get_tmp_rgb(rgb_path, size):
     with open(rgb_path, 'wb') as rgb_f:
         # FIXME: Why can't we get this in pure Python????? This isn't
         # Windows-compatible
-        subprocess.run(['head', '-c', f'{size}'], stdout=rgb_f, check=True)
+        cmd = ['head', '-c', str(size)]
+        subprocess.run(cmd, stdout=rgb_f, check=True)
 
         if os.path.getsize(rgb_f.name) != size:
-            print('Invalid number of bytes in RGB file... aborting!',
-                  file=sys.stderr)
             os.remove(rgb_path)
-            sys.exit(1)
+            die('Invalid number of bytes in RGB file... aborting!')
 
 def rgb_to_png(rgb_path, png_path, dimensions, page):
-        try:
-            subprocess.run(['convert',
-                           '-size' , f'{dimensions.width}x{dimensions.height}',
-                           '-depth', f'{dimensions.depth}',
-                           f'rgb:{rgb_path}', f'png:{png_path}'], check=True)
-        except subprocess.CalledProcessError as err:
-            print(f'Page {page} conversion failed (RGB->PNG): {err}',
-                  file=sys.stderr)
-            sys.exit(1)
-        else:
-            os.remove(rgb_path)
+    cmd = ['convert', '-size', f'{dimensions.width}x{dimensions.height}',
+           '-depth', str(dimensions.depth), f'rgb:{rgb_path}',
+           f'png:{png_path}']
 
-def convert_received_rgb_file(dimensions, page):
-    # TODO: Does the number of X's matter?
-    with tempfile.NamedTemporaryFile(prefix='qpdf-conversion-') as rcvd_f:
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        die(f'Page {page} conversion failed (RGB->PNG)... aborting!')
+    else:
+        os.remove(rgb_path)
+
+def convert_rgb(dimensions, page):
+    with NamedTemporaryFile(prefix='qpdf-conversion-') as rcvd_f:
         rgb_path = f'{rcvd_f.name}-{page}.rgb'
         png_path = f'{rcvd_f.name}-{page}.png'
-        get_tmp_rgb(rgb_path, dimensions.size)
+        recv_rgb(rgb_path, dimensions.size)
         rgb_to_png(rgb_path, png_path, dimensions, page)
 
     return png_path
 
-def process_pdf(untrusted_pdf, page_count):
+
+###############################
+#         PDF-related
+###############################
+
+def recv_page_count():
+    try:
+        page_count = int(recv())
+        check_range(page_count, MAX_PAGES)
+    except ValueError:
+        die("Invalid number of pages returned... aborting!")
+
+    return page_count
+
+def archive_pdf(untrusted_pdf):
+    archived_pdf = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf)}'
+    os.rename(untrusted_pdf, archived_pdf)
+    info(f'Original PDF saved as: {archived_pdf}')
+
+def send_pdf_file(untrusted_pdf):
+    info('Sending file to a Disposable VM...')
+    with open(untrusted_pdf, 'rb') as f:
+        send_b(f.read())
+    os.close(sys.stdout.fileno())
+
+def process_pdf_file(untrusted_pdf, page_count):
     page = 1
     images = []
     trusted_pdf = f'{os.path.splitext(untrusted_pdf)[0]}.trusted.pdf'
 
-    print("Waiting for converted sample...", file=sys.stderr)
+    info("Waiting for converted sample...")
+
     while page <= page_count:
-        dimensions = get_img_dimensions()
+        dimensions = get_dimensions()
+
+        info(f'Receiving page {page}/{page_count}...', '\r')
 
         # TODO: There's some weird verbose condition here in the og script
-        print(f'Receiving page {page}/{page_count}...', end='\r',
-              file=sys.stderr)
-        png_path = convert_received_rgb_file(dimensions, page)
+        png_path = convert_rgb(dimensions, page)
         images.append(Image.open(png_path))
 
         page += 1
     else:
-        print('', file=sys.stderr)
+        info('')
 
     # TODO: Maybe it'd be better to save->delete png over and over again to
     # avoid storing all PNGs in memory
@@ -184,42 +193,31 @@ def process_pdf(untrusted_pdf, page_count):
         img.close()
         os.remove(img.filename)
 
-    print(f'Converted PDF saved as: {trusted_pdf}', file=sys.stderr)
-
-def archive_pdf(untrusted_pdf):
-    archived_pdf = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf)}'
-    os.rename(untrusted_pdf, archived_pdf)
-    print(f'Original PDF saved as: {archived_pdf}', file=sys.stderr)
-
-def mkdir_archive():
-    if not os.path.exists(ARCHIVE_PATH):
-        os.mkdir(ARCHIVE_PATH)
-
-###############################
-#       qrexec-related
-###############################
-
-def send_pdf_file(untrusted_pdf):
-    print('Sending file to a Disposable VM...', file=sys.stderr)
-    with open(untrusted_pdf, 'rb') as f:
-        sys.stdout.buffer.write(f.read())
-    os.close(sys.stdout.fileno())
+    info(f'Converted PDF saved as: {trusted_pdf}')
 
 def process_pdfs(untrusted_pdfs):
     # TODO: Remove [0] when support for multiple PDFs is available
     # for untrusted_pdf in untrusted_pdfs:
     send_pdf_file(untrusted_pdfs[0])
-    page_count = receive_page_count()
-    process_pdf(untrusted_pdfs[0], page_count)
+    page_count = recv_page_count()
+    process_pdf_file(untrusted_pdfs[0], page_count)
     archive_pdf(untrusted_pdfs[0])
+
+
+###############################
+#           Main
+###############################
 
 def main():
     untrusted_pdfs = sys.argv[1:]
-    mkdir_archive()
+
+    if not os.path.exists(ARCHIVE_PATH):
+        os.mkdir(ARCHIVE_PATH)
+
     process_pdfs(untrusted_pdfs)
 
 if __name__ == '__main__':
     try:
         main()
-    except KeyboardInterrupt as e:
-        sys.exit(0)
+    except KeyboardInterrupt:
+        die("KeyboardInterrupt... aborting!")
