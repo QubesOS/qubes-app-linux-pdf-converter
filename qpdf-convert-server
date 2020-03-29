@@ -1,8 +1,9 @@
-#!/bin/bash
-#
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 # The Qubes OS Project, http://www.qubes-os.org
 #
-# Copyright (C) 2013  Joanna Rutkowska <joanna@invisiblethingslab.com>
+# Copyright (C) 2013 Joanna Rutkowska <joanna@invisiblethingslab.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -17,52 +18,155 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-#
-# Requires: 
-# - poppler-utils (pdftocairo, pdfinfo)
-# - ImageMagick (convert)
 
-INPUT_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX)
-TEMP_PNG_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX.png)
-TEMP_RGB_FILE=$(mktemp --tmpdir qpdf-conversion-XXXXXXXX.pdf)
-IMG_DEPTH=8
+from collections import namedtuple
+import logging
+import os
+import subprocess
+import sys
+from tempfile import NamedTemporaryFile
 
-# Get the original (untrusted) PDF file...
-cat > "$INPUT_FILE"
+logging.basicConfig(format='%(message)s', stream=sys.stderr)
 
-# now, let's convert it into a simple representation,
-# and send back to the client.
 
-# Note that we might be compromised at this point (due to exploitation of PDF
-# parsing code) and so what we're sending back might very well be something
-# totally different than a decent simple representation -- the client should
-# never trust what we're sending back, and should discard anything that doesn't
-# look like the simple representation!
+###############################
+#         Utilities
+###############################
 
-NO_PAGES=$(pdfinfo "$INPUT_FILE" | grep -a "^Pages:" | sed -e "s/^Pages:[^0-9]*//")
-if [ -z "$NO_PAGES" ]; then
-    # Perhaps this is not a PDF, only some JPG/PNG/etc? Let's try it anyway...
-    NO_PAGES=1
-fi
-echo $NO_PAGES
+def info(msg, suffix=None):
+    print(msg, end=suffix, flush=True, file=sys.stderr)
 
-cd /tmp || exit 1
-PAGE=1
-while [ $PAGE -le $NO_PAGES ]; do
-    # if pdftocairo fails, lets try the ImageMagick's convert -- perhaps this is just some img file?
-    pdftocairo "$INPUT_FILE" -png -f $PAGE -l $PAGE -singlefile "$(basename "$TEMP_PNG_FILE" .png)" || \
-        convert "$INPUT_FILE" png:"$TEMP_PNG_FILE"
-    IMG_WIDTH=$(identify -format "%w" "$TEMP_PNG_FILE")
-    IMG_HEIGHT=$(identify -format "%h" "$TEMP_PNG_FILE")
-    convert "$TEMP_PNG_FILE" -depth $IMG_DEPTH rgb:"$TEMP_RGB_FILE"
-    echo "$IMG_WIDTH $IMG_HEIGHT"
-    cat "$TEMP_RGB_FILE"
-    PAGE=$((PAGE + 1))
-done
+def die(msg):
+    logging.error(msg)
+    sys.exit(1)
 
-# Cleanup tmp files...
-# Note: our DispVM might get destroyed before the commands below
-# complete, but that doesn't hurt us, because this is... well a DispVM.
-rm -f "$INPUT_FILE"
-rm -f "$TEMP_PNG_FILE"
-rm -f "$TEMP_RGB_FILE"
+def send(data):
+    print(data, flush=True)
+
+def send_b(data):
+    sys.stdout.buffer.write(data)
+
+def recv_b():
+    return sys.stdin.buffer.read()
+
+
+###############################
+#        Image-related
+###############################
+
+def send_dimensions(png_path):
+    cmd1 = ['identify', '-format', '%w', png_path]
+    cmd2 = ['identify', '-format', '%h', png_path]
+
+    try:
+        width = subprocess.check_output(cmd1, text=True)
+        height = subprocess.check_output(cmd2, text=True)
+    except CalledProcessError:
+        die("Failed to gather dimensions... Aborting")
+
+    send(f'{width} {height}')
+
+def send_rgb_file(rgb_path):
+    with open(rgb_path, 'rb') as f:
+        data = f.read()
+        send_b(data)
+
+def pdf_to_png(page, pdf_path, png_path):
+    png_filename = os.path.splitext(png_path)[0]
+    cmd = ['pdftocairo', pdf_path, '-png', '-f', str(page), '-l', str(page),
+           '-singlefile', png_filename]
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        cmd = ['convert', pdf_path, f'png:{png_path}']
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError:
+            die(f'Page {page} conversion failed (PDF->PNG): {err}')
+
+def png_to_rgb(png_path, rgb_path):
+    depth = 8
+    cmd = ['convert', png_path, '-depth', str(depth), f'rgb:{rgb_path}']
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        die(f'Page {page} conversion failed (PNG->RGB): {err}')
+
+
+###############################
+#         File-related
+###############################
+
+def get_tmp_files():
+    Files = namedtuple('Files', ['pdf', 'png', 'rgb'])
+    suffixes = ('', '.png', '.rgb')
+    paths = []
+
+    for suffix in suffixes:
+        with NamedTemporaryFile(prefix='qpdf-conversion-', suffix=suffix) as f:
+            paths.append(f.name)
+
+    return Files(pdf=paths[0], png=paths[1], rgb=paths[2])
+
+def make_tmp_files(paths):
+    for path in paths:
+        with open(path, 'wb') as f:
+            f.write(b'')
+
+
+###############################
+#         PDF-related
+###############################
+
+def recv_pdf(pdf_path):
+    with open(pdf_path, 'wb') as f:
+        data = recv_b()
+        f.write(data)
+
+def get_page_count(pdf_path):
+    pages = 0
+    output = None
+    cmd = ['pdfinfo', pdf_path]
+
+    try:
+        output = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError:
+        info(f'Probably not a PDF...')
+    else:
+        for line in output.decode().splitlines():
+            if 'Pages:' in line:
+                pages = int(line.split(':')[1])
+
+    return pages
+
+def process_pdf(paths):
+    page = 1
+
+    pages = get_page_count(paths.pdf)
+    send(pages)
+
+    while (page <= pages):
+        pdf_to_png(page, paths.pdf, paths.png)
+        send_dimensions(paths.png)
+        png_to_rgb(paths.png, paths.rgb)
+        send_rgb_file(paths.rgb)
+        page += 1
+
+
+###############################
+#            Main
+###############################
+
+def main():
+    paths = get_tmp_files()
+    make_tmp_files(paths)
+    recv_pdf(paths.pdf)
+    process_pdf(paths)
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        die("KeyboardInterrupt... aborting!")
