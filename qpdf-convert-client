@@ -43,25 +43,37 @@ logging.basicConfig(format='%(message)s', stream=sys.stderr)
 ###############################
 
 def info(msg, suffix=None):
+    '''Qrexec wrapper for displaying information
+
+    `suffix` is typically only ever used when `msg` needs to overwrite
+    the line of the previous message (so as to imitate an updating
+    line). This is done by setting `suffix` to '\r'.
+    '''
     print(msg, end=suffix, flush=True, file=sys.stderr)
 
 def die(msg):
+    '''Qrexec wrapper for displaying error messages'''
     logging.error(msg)
     sys.exit(1)
 
 def send(data):
+    '''Qrexec wrapper for sending text data to the client's STDOUT'''
     print(data, flush=True)
 
 def send_b(data):
+    '''Qrexec wrapper for sending binary data to the client's STDOUT'''
     sys.stdout.buffer.write(data)
 
 def recv():
+    '''Qrexec wrapper for receiving text data from a client'''
     return input()
 
 def recv_b():
+    '''Qrexec wrapper for receiving binary data from a client'''
     return sys.stdin.buffer.read()
 
 def check_range(val, upper):
+    '''Raises a ValueError if the value isn't between 1 and some upper bound'''
     if (not 1 <= val <= upper) or (not 1 <= val <= upper):
         raise ValueError
 
@@ -71,9 +83,11 @@ def check_range(val, upper):
 ###############################
 
 def recv_measurements():
+    '''Receive image measurements for a PDF page from server'''
     return (int(val) for val in recv().split(' ', 2))
 
 def get_size(width, height):
+    '''Compute image size based on the received measurements'''
     size = width * height * 3
 
     if size > MAX_IMG_SIZE:
@@ -82,6 +96,7 @@ def get_size(width, height):
     return size
 
 def get_dimensions():
+    '''Compute image dimensions based on received measurements'''
     depth = 8
 
     try:
@@ -97,6 +112,7 @@ def get_dimensions():
     return Dimensions(width=width, height=height, size=size, depth=depth)
 
 def recv_rgb(rgb_path, size):
+    '''Receive a presumably clean RGB file of a PDF page from server'''
     # XXX: For some reason, this leaves us missing alot of bytes
     # rcvd_bytes = input().encode('utf-8', 'surrogateescape')
     # rcvd_bytes = rcvd_bytes[:dimensions.size]
@@ -119,6 +135,7 @@ def recv_rgb(rgb_path, size):
             die('Invalid number of bytes in RGB file... aborting!')
 
 def rgb_to_png(rgb_path, png_path, dimensions, page):
+    '''Convert an RGB file to a PNG file'''
     cmd = ['convert', '-size', f'{dimensions.width}x{dimensions.height}',
            '-depth', str(dimensions.depth), f'rgb:{rgb_path}',
            f'png:{png_path}']
@@ -131,6 +148,7 @@ def rgb_to_png(rgb_path, png_path, dimensions, page):
         os.remove(rgb_path)
 
 def convert_rgb(dimensions, page):
+    '''Driver for receiving and converting RGB files'''
     with NamedTemporaryFile(prefix='qpdf-conversion-') as rcvd_f:
         rgb_path = f'{rcvd_f.name}-{page}.rgb'
         png_path = f'{rcvd_f.name}-{page}.png'
@@ -145,6 +163,7 @@ def convert_rgb(dimensions, page):
 ###############################
 
 def recv_page_count():
+    '''Receive number of pages in PDF file from server'''
     try:
         page_count = int(recv())
         check_range(page_count, MAX_PAGES)
@@ -153,18 +172,21 @@ def recv_page_count():
 
     return page_count
 
-def archive_pdf(untrusted_pdf):
-    archived_pdf = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf)}'
-    os.rename(untrusted_pdf, archived_pdf)
-    info(f'Original PDF saved as: {archived_pdf}')
-
 def send_pdf_file(untrusted_pdf):
+    '''Send untrusted PDF file to server'''
     info('Sending file to a Disposable VM...')
     with open(untrusted_pdf, 'rb') as f:
         send_b(f.read())
     os.close(sys.stdout.fileno())
 
+def archive_pdf(untrusted_pdf):
+    '''Move original untrusted PDF to an archive'''
+    archived_pdf = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf)}'
+    os.rename(untrusted_pdf, archived_pdf)
+    info(f'Original PDF saved as: {archived_pdf}')
+
 def process_pdf_file(untrusted_pdf, page_count):
+    '''Process an untrusted PDF page and save the trusted result'''
     page = 1
     images = []
     trusted_pdf = f'{os.path.splitext(untrusted_pdf)[0]}.trusted.pdf'
@@ -196,6 +218,7 @@ def process_pdf_file(untrusted_pdf, page_count):
     info(f'Converted PDF saved as: {trusted_pdf}')
 
 def process_pdfs(untrusted_pdfs):
+    '''Wrapper for PDF processing'''
     # TODO: Remove [0] when support for multiple PDFs is available
     # for untrusted_pdf in untrusted_pdfs:
     send_pdf_file(untrusted_pdfs[0])
