@@ -71,9 +71,11 @@ def send_dimensions(png_path):
     cmd2 = ['identify', '-format', '%h', png_path]
 
     try:
-        width = subprocess.check_output(cmd1, text=True)
-        height = subprocess.check_output(cmd2, text=True)
-    except CalledProcessError:
+        width = subprocess.run(cmd1, capture_output=True,
+                               check=True).stdout.decode()
+        height = subprocess.run(cmd2, capture_output=True,
+                                check=True).stdout.decode()
+    except subprocess.CalledProcessError:
         die("Failed to gather dimensions... Aborting")
 
     send(f'{width} {height}')
@@ -150,11 +152,11 @@ def get_page_count(pdf_path):
     cmd = ['pdfinfo', pdf_path]
 
     try:
-        output = subprocess.check_output(cmd, text=True)
+        output = subprocess.run(cmd, capture_output=True, check=True)
     except subprocess.CalledProcessError:
         info(f'Probably not a PDF...')
     else:
-        for line in output.splitlines():
+        for line in output.stdout.decode().splitlines():
             if 'Pages:' in line:
                 pages = int(line.split(':')[1])
 
