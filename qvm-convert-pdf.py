@@ -20,7 +20,6 @@
 #
 #
 
-import argparse
 import logging
 import os
 import sys
@@ -39,51 +38,23 @@ def die(msg):
     logging.error(msg)
     sys.exit(1)
 
-
-###############################
-#          Parsing
-###############################
-
-class ArgumentParser(argparse.ArgumentParser):
-    '''Overriding class for custom help message.'''
-    def print_help(self):
-        print(f'''\
-usage: {PROG_NAME} [OPTIONS ...] FILE
-
-Options:
-   --help      Show this help message and exit.''')
-        sys.exit(0)
-
-def parser_new():
-    parser = ArgumentParser()
-
-    if len(sys.argv) == 1:
-        parser.print_help()
-
-    # parser.add_argument('-v', '--verbose', action='count', default=0)
-
-    return parser.parse_known_args()
+def usage():
+    print(f'usage: {PROG_NAME} [FILE ...]')
+    sys.exit(0)
 
 def parse_args(args):
-    # if args.version:
-        # version()
-    return
+    if len(args) == 1:
+        usage()
 
-def check_pdf_paths(untrusted_pdfs):
-    for untrusted_pdf in untrusted_pdfs:
-        if not os.path.exists(untrusted_pdf):
-            die(f'{untrusted_pdf}: No such file')
-
-
-###############################
-#           Main
-###############################
+def check_pdf_paths(pdfs):
+    for pdf in pdfs:
+        if not os.path.exists(pdf):
+            die(f'{pdf}: No such file')
 
 def main():
     # TODO: Move parsing into qpdf-convert-client
-    args, untrusted_pdfs = parser_new()
-    parse_args(args)
-    check_pdf_paths(untrusted_pdfs)
+    parse_args(sys.argv)
+    check_pdf_paths(sys.argv[1:])
 
     # TODO: Handle os.execl() error (maybe with os._exit(127)
     cmd = [QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
