@@ -86,7 +86,7 @@ def main():
     check_pdf_paths(untrusted_pdfs)
 
     # TODO: Handle os.execl() error (maybe with os._exit(127)
-    cmd = [QREXEC_CLIENT, 'disp8051', 'qubes.PdfConvert',
+    cmd = [QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
            '/usr/lib/qubes/qpdf-convert-client', *untrusted_pdfs]
     os.execvp(QREXEC_CLIENT, cmd)
 
