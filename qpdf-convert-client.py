@@ -67,10 +67,16 @@ def send_b(data):
 
 def recv():
     '''Qrexec wrapper for receiving text data from a client'''
-    return input()
+    try:
+        data = input()
+    except EOFError:
+        sys.exit(1)
+    else:
+        return data
 
 def recv_b():
     '''Qrexec wrapper for receiving binary data from a client'''
+    # TODO: Does this raise EOFError like in recv()?
     return sys.stdin.buffer.read()
 
 def check_range(val, upper):
