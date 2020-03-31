@@ -184,7 +184,7 @@ def send_pdf_file(untrusted_pdf):
     info('Sending file to a Disposable VM...')
     with open(untrusted_pdf, 'rb') as f:
         send_b(f.read())
-    os.close(sys.stdout.fileno())
+    os.close(sys.__stdout__.fileno())
 
 def archive_pdf(untrusted_pdf):
     '''Move original untrusted PDF to an archive'''
