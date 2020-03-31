@@ -27,14 +27,10 @@ import sys
 PROG_NAME = os.path.basename(sys.argv[0])
 QREXEC_CLIENT = '/usr/bin/qrexec-client-vm'
 
-
-###############################
-#         Utilities
-###############################
+logging.basicConfig(format='%(message)s', stream=sys.stderr)
 
 def die(msg):
     '''Qrexec wrapper for displaying error messages'''
-    logging.basicConfig(format='%(message)s', stream=sys.stderr)
     logging.error(msg)
     sys.exit(1)
 
