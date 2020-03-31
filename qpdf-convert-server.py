@@ -191,4 +191,4 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        die("KeyboardInterrupt... aborting!")
+        die("KeyboardInterrupt... Aborting!")
