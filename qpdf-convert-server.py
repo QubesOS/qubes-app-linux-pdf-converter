@@ -50,6 +50,7 @@ def die(msg):
 def send(data):
     '''Qrexec wrapper for sending text data to the client's STDOUT'''
     print(data, flush=True)
+    sys.stdout.buffer.flush()
 
 def send_b(data):
     '''Qrexec wrapper for sending binary data to the client's STDOUT'''

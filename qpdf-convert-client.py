@@ -63,6 +63,7 @@ def send(data):
 def send_b(data):
     '''Qrexec wrapper for sending binary data to the client's STDOUT'''
     sys.stdout.buffer.write(data)
+    sys.stdout.buffer.flush()
 
 def recv():
     '''Qrexec wrapper for receiving text data from a client'''
