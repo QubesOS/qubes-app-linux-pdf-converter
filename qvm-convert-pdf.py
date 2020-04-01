@@ -38,6 +38,8 @@ def check_pdf_paths(pdfs):
     for pdf in pdfs:
         if not os.path.exists(pdf):
             die(f'{pdf}: No such file')
+        elif not os.path.isfile(pdf):
+            die(f'{pdf}: Not a regular file')
 
 def main():
     if len(sys.argv) == 1:
