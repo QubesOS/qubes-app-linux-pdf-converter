@@ -34,22 +34,15 @@ def die(msg):
     logging.error(msg)
     sys.exit(1)
 
-def usage():
-    print(f'usage: {PROG_NAME} [FILE ...]')
-    sys.exit(0)
-
-def parse_args(args):
-    if len(args) == 1:
-        usage()
-
 def check_pdf_paths(pdfs):
     for pdf in pdfs:
         if not os.path.exists(pdf):
             die(f'{pdf}: No such file')
 
 def main():
-    # TODO: Move parsing into qpdf-convert-client
-    parse_args(sys.argv)
+    if len(sys.argv) == 1:
+        die(f'usage: {PROG_NAME} [FILE ...]')
+
     check_pdf_paths(sys.argv[1:])
 
     # TODO: Handle os.execl() error (maybe with os._exit(127)
