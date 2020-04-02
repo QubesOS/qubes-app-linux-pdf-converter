@@ -81,7 +81,6 @@ def recv_b():
     return untrusted_data
 
 def check_range(val, upper):
-    '''Raises a ValueError if the value isn't between 1 and some upper bound'''
     if (not 1 <= val <= upper) or (not 1 <= val <= upper):
         raise ValueError
 
@@ -94,13 +93,12 @@ def mkdir_archive():
 #        Image-related
 ###############################
 
-def recv_measurements():
+def recv_img_measurements():
     '''Receive image measurements for a PDF page from server'''
     untrusted_measurements = recv().split(' ', 2)
     return [int(untrusted_value) for untrusted_value in untrusted_measurements]
 
-def get_size(untrusted_width, untrusted_height):
-    '''Compute image size based on the received measurements'''
+def get_img_size(untrusted_width, untrusted_height):
     untrusted_size = untrusted_width * untrusted_height * 3
 
     if untrusted_size > MAX_IMG_SIZE:
@@ -108,25 +106,23 @@ def get_size(untrusted_width, untrusted_height):
 
     return untrusted_size
 
-def get_dimensions():
-    '''Compute image dimensions based on received measurements'''
+def get_img_dimensions():
     depth = 8
 
     try:
-        untrusted_width, untrusted_height = recv_measurements()
+        untrusted_width, untrusted_height = recv_img_measurements()
         check_range(untrusted_width, MAX_IMG_WIDTH)
         check_range(untrusted_height, MAX_IMG_HEIGHT)
     except ValueError:
         die("Invalid image geometry returned... aborting!")
 
-    untrusted_size = get_size(untrusted_width, untrusted_height)
+    untrusted_size = get_img_size(untrusted_width, untrusted_height)
     Dimensions = namedtuple('Dimensions', ['width', 'height', 'depth', 'size'])
 
     return Dimensions(width=untrusted_width, height=untrusted_height,
                       size=untrusted_size, depth=depth)
 
-def recv_rgb(rgb_path, untrusted_size):
-    '''Receive a presumably clean RGB file of a PDF page from server'''
+def recv_rgb_file(rgb_path, untrusted_size):
     # XXX: For some reason, this leaves us missing alot of bytes
     # rcvd_bytes = input().encode('utf-8', 'surrogateescape')
     # rcvd_bytes = rcvd_bytes[:dimensions.size]
@@ -149,7 +145,6 @@ def recv_rgb(rgb_path, untrusted_size):
             die('Invalid number of bytes in RGB file... aborting!')
 
 def rgb_to_png(rgb_path, png_path, untrusted_dimensions, page):
-    '''Convert an RGB file to a PNG file'''
     cmd = ['convert', '-size',
            f'{untrusted_dimensions.width}x{untrusted_dimensions.height}',
            '-depth', str(untrusted_dimensions.depth), f'rgb:{rgb_path}',
@@ -162,12 +157,11 @@ def rgb_to_png(rgb_path, png_path, untrusted_dimensions, page):
     else:
         os.remove(rgb_path)
 
-def convert_rgb(untrusted_dimensions, page):
-    '''Driver for receiving and converting RGB files'''
+def convert_rgb_file(untrusted_dimensions, page):
     with NamedTemporaryFile(prefix='qpdf-conversion-') as f:
         rgb_path = f'{f.name}-{page}.rgb'
         png_path = f'{f.name}-{page}.png'
-        recv_rgb(rgb_path, untrusted_dimensions.size)
+        recv_rgb_file(rgb_path, untrusted_dimensions.size)
         rgb_to_png(rgb_path, png_path, untrusted_dimensions, page)
 
     return png_path
@@ -178,7 +172,6 @@ def convert_rgb(untrusted_dimensions, page):
 ###############################
 
 def recv_page_count():
-    '''Receive number of pages in PDF file from server'''
     try:
         untrusted_page_count = int(recv())
         check_range(untrusted_page_count, MAX_PAGES)
@@ -187,21 +180,18 @@ def recv_page_count():
 
     return untrusted_page_count
 
-def send_pdf_file(untrusted_pdf_path):
-    '''Send untrusted PDF file to server'''
+def send_pdf(untrusted_pdf_path):
     info('Sending file to a Disposable VM...')
     with open(untrusted_pdf_path, 'rb') as f:
         send_b(f.read())
     os.close(sys.__stdout__.fileno())
 
 def archive_pdf(untrusted_pdf_path):
-    '''Move original untrusted PDF to an archive directory'''
     archived_pdf_path = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf_path)}'
     os.rename(untrusted_pdf_path, archived_pdf_path)
     info(f'Original PDF saved as: {archived_pdf_path}')
 
-def process_pdf_file(untrusted_pdf_path, untrusted_page_count):
-    '''Process an untrusted PDF page and save the trusted result'''
+def process_pdf(untrusted_pdf_path, untrusted_page_count):
     page = 1
     images = []
     pdf_path = f'{os.path.splitext(untrusted_pdf_path)[0]}.trusted.pdf'
@@ -209,12 +199,12 @@ def process_pdf_file(untrusted_pdf_path, untrusted_page_count):
     info("Waiting for converted sample...")
 
     while page <= untrusted_page_count:
-        untrusted_dimensions = get_dimensions()
+        untrusted_dimensions = get_img_dimensions()
 
         info(f'Receiving page {page}/{untrusted_page_count}...', '\r')
 
         # TODO: There's some weird verbose condition here in the og script
-        png_path = convert_rgb(untrusted_dimensions, page)
+        png_path = convert_rgb_file(untrusted_dimensions, page)
         images.append(Image.open(png_path))
 
         page += 1
@@ -233,12 +223,11 @@ def process_pdf_file(untrusted_pdf_path, untrusted_page_count):
     info(f'Converted PDF saved as: {pdf_path}')
 
 def process_pdfs(untrusted_pdf_paths):
-    '''Wrapper for PDF processing'''
     # TODO: Remove [0] when support for multiple PDFs is available
     # for untrusted_pdf_path in untrusted_pdf_paths:
-    send_pdf_file(untrusted_pdf_paths[0])
+    send_pdf(untrusted_pdf_paths[0])
     untrusted_page_count = recv_page_count()
-    process_pdf_file(untrusted_pdf_paths[0], untrusted_page_count)
+    process_pdf(untrusted_pdf_paths[0], untrusted_page_count)
     archive_pdf(untrusted_pdf_paths[0])
 
 

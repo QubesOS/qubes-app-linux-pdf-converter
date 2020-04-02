@@ -66,10 +66,10 @@ def recv_b():
 #        Image-related
 ###############################
 
-def send_dimensions(png_path):
-    '''Send dimensions of untrusted PNG file to client for conversion'''
+def send_img_dimensions(png_path):
     cmd_width = ['identify', '-format', '%w', png_path]
-    cmd_height = ['identify', '-format', '%w', png_path]
+    cmd_height = ['identify', '-format', '%h', png_path]
+
     try:
         untrusted_width = subprocess.run(cmd_width, capture_output=True,
                                          check=True).stdout.decode()
@@ -81,13 +81,11 @@ def send_dimensions(png_path):
     send(f'{untrusted_width} {untrusted_height}')
 
 def send_rgb_file(rgb_path):
-    '''Send presumably clean RGB file to client'''
     with open(rgb_path, 'rb') as f:
         data = f.read()
         send_b(data)
 
 def pdf_to_png(pagenum, pdf_path, png_path):
-    '''Convert an untrusted PDF page into an intermediate PNG file'''
     png_filename = os.path.splitext(png_path)[0]
     cmd = ['pdftocairo', pdf_path, '-png', '-f', str(pagenum), '-l',
            str(pagenum), '-singlefile', png_filename]
@@ -102,7 +100,6 @@ def pdf_to_png(pagenum, pdf_path, png_path):
             die(f'Page {pagenum} conversion failed (PDF->PNG): {err}')
 
 def png_to_rgb(pagenum, png_path, rgb_path):
-    '''Convert PNG file into a presumably clean RGB file'''
     depth = 8
     cmd = ['convert', png_path, '-depth', str(depth), f'rgb:{rgb_path}']
 
@@ -116,8 +113,8 @@ def png_to_rgb(pagenum, png_path, rgb_path):
 #         File-related
 ###############################
 
-def get_tmp_files():
-    '''Return random temporary file names for images and the untrusted PDF'''
+def create_tmp_files():
+    '''Create temporary file for storing page images and the untrusted PDF'''
     Files = namedtuple('Files', ['pdf', 'png', 'rgb'])
     suffixes = ('', '.png', '.rgb')
     paths = []
@@ -126,13 +123,11 @@ def get_tmp_files():
         with NamedTemporaryFile(prefix='qpdf-conversion-', suffix=suffix) as f:
             paths.append(f.name)
 
-    return Files(pdf=paths[0], png=paths[1], rgb=paths[2])
-
-def make_tmp_files(paths):
-    '''Create temporary files to store images and the untrusted PDF'''
     for path in paths:
         with open(path, 'wb') as f:
             f.write(b'')
+
+    return Files(pdf=paths[0], png=paths[1], rgb=paths[2])
 
 
 ###############################
@@ -140,13 +135,11 @@ def make_tmp_files(paths):
 ###############################
 
 def recv_pdf(pdf_path):
-    '''Receive untrusted PDF file from client'''
     with open(pdf_path, 'wb') as f:
         untrusted_data = recv_b()
         f.write(untrusted_data)
 
 def get_page_count(pdf_path):
-    '''Get number of pages in the untrusted PDF file'''
     untrusted_pages = 0
     output = None
     cmd = ['pdfinfo', pdf_path]
@@ -163,7 +156,6 @@ def get_page_count(pdf_path):
     return untrusted_pages
 
 def process_pdf(paths):
-    '''Process pages of the untrusted PDF file'''
     page = 1
 
     untrusted_pages = get_page_count(paths.pdf)
@@ -171,7 +163,7 @@ def process_pdf(paths):
 
     while (page <= untrusted_pages):
         pdf_to_png(page, paths.pdf, paths.png)
-        send_dimensions(paths.png)
+        send_img_dimensions(paths.png)
         png_to_rgb(page, paths.png, paths.rgb)
         send_rgb_file(paths.rgb)
         page += 1
@@ -182,8 +174,7 @@ def process_pdf(paths):
 ###############################
 
 def main():
-    paths = get_tmp_files()
-    make_tmp_files(paths)
+    paths = create_tmp_files()
     recv_pdf(paths.pdf)
     process_pdf(paths)
 
