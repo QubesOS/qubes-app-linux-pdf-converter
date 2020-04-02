@@ -1,21 +1,21 @@
 Qubes PDF Converter
 ====================
 
-Qubes PDF converter is a [Qubes](https://qubes-os.org) Application, which
-utilizes Qubes flexible qrexec (inter-VM communication) infrastructure and
-Disposable VMs to perform conversion of potentially untrusted (e.g. maliciously
+Qubes PDF converter is a [Qubes](https://qubes-os.org) Application that
+utilizes Qubes' flexible qrexec (inter-VM communication) infrastructure and
+Disposable VMs to securely convert potentially untrusted (e.g. maliciously
 malformed) PDF files into safe-to-view PDF files.
 
-This is done by having the Disposable VM perform the complex (and potentially
-buggy) rendering of the PDF in question and sending the resulting RGB bitmap
-(simple representation) to the client AppVM. The client AppVM can _trivially_
-verify the received data are indeed the simple representation, and then
-construct a new PDF out of the received bitmap. Of course the price we pay for
-this conversion is loosing any structural information and text-based search in
-the converted PDF.
+This is done by having a Disposable VM render each page of a PDF file into a 
+very simple representation (RGB bitmap) that (presumably) leaves no room for 
+malicious code. This representation is then sent back to the client AppVM which 
+then constructs an entirely new PDF file out of the received bitmaps.
 
-More discussion and introduction of the concept has been described in the
-original article
+Of course, the price we pay for this conversion is an increase in file size and 
+the loss of any structural information or text-based search in the converted 
+PDF.
+
+More discussion of the concept has been described in the original article
 [here](http://blog.invisiblethings.org/2013/02/21/converting-untrusted-pdfs-into-trusted.html).
 
 Usage
