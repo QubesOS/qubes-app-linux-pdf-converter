@@ -58,7 +58,8 @@ def send_b(data):
 
 def recv_b():
     '''Qrexec wrapper for receiving binary data from a client'''
-    return sys.stdin.buffer.read()
+    untrusted_data = sys.stdin.buffer.read()
+    return untrusted_data
 
 
 ###############################
@@ -67,18 +68,17 @@ def recv_b():
 
 def send_dimensions(png_path):
     '''Send dimensions of untrusted PNG file to client for conversion'''
-    cmd1 = ['identify', '-format', '%w', png_path]
-    cmd2 = ['identify', '-format', '%h', png_path]
-
+    cmd_width = ['identify', '-format', '%w', png_path]
+    cmd_height = ['identify', '-format', '%w', png_path]
     try:
-        width = subprocess.run(cmd1, capture_output=True,
-                               check=True).stdout.decode()
-        height = subprocess.run(cmd2, capture_output=True,
-                                check=True).stdout.decode()
+        untrusted_width = subprocess.run(cmd_width, capture_output=True,
+                                         check=True).stdout.decode()
+        untrusted_height = subprocess.run(cmd_height, capture_output=True,
+                                         check=True).stdout.decode()
     except subprocess.CalledProcessError:
         die("Failed to gather dimensions... Aborting")
 
-    send(f'{width} {height}')
+    send(f'{untrusted_width} {untrusted_height}')
 
 def send_rgb_file(rgb_path):
     '''Send presumably clean RGB file to client'''
@@ -86,11 +86,11 @@ def send_rgb_file(rgb_path):
         data = f.read()
         send_b(data)
 
-def pdf_to_png(page, pdf_path, png_path):
+def pdf_to_png(pagenum, pdf_path, png_path):
     '''Convert an untrusted PDF page into an intermediate PNG file'''
     png_filename = os.path.splitext(png_path)[0]
-    cmd = ['pdftocairo', pdf_path, '-png', '-f', str(page), '-l', str(page),
-           '-singlefile', png_filename]
+    cmd = ['pdftocairo', pdf_path, '-png', '-f', str(pagenum), '-l',
+           str(pagenum), '-singlefile', png_filename]
 
     try:
         subprocess.run(cmd, check=True)
@@ -99,9 +99,9 @@ def pdf_to_png(page, pdf_path, png_path):
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError:
-            die(f'Page {page} conversion failed (PDF->PNG): {err}')
+            die(f'Page {pagenum} conversion failed (PDF->PNG): {err}')
 
-def png_to_rgb(png_path, rgb_path):
+def png_to_rgb(pagenum, png_path, rgb_path):
     '''Convert PNG file into a presumably clean RGB file'''
     depth = 8
     cmd = ['convert', png_path, '-depth', str(depth), f'rgb:{rgb_path}']
@@ -109,7 +109,7 @@ def png_to_rgb(png_path, rgb_path):
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
-        die(f'Page {page} conversion failed (PNG->RGB): {err}')
+        die(f'Page {pagenum} conversion failed (PNG->RGB): {err}')
 
 
 ###############################
@@ -142,12 +142,12 @@ def make_tmp_files(paths):
 def recv_pdf(pdf_path):
     '''Receive untrusted PDF file from client'''
     with open(pdf_path, 'wb') as f:
-        data = recv_b()
-        f.write(data)
+        untrusted_data = recv_b()
+        f.write(untrusted_data)
 
 def get_page_count(pdf_path):
     '''Get number of pages in the untrusted PDF file'''
-    pages = 0
+    untrusted_pages = 0
     output = None
     cmd = ['pdfinfo', pdf_path]
 
@@ -158,21 +158,21 @@ def get_page_count(pdf_path):
     else:
         for line in output.stdout.decode().splitlines():
             if 'Pages:' in line:
-                pages = int(line.split(':')[1])
+                untrusted_pages = int(line.split(':')[1])
 
-    return pages
+    return untrusted_pages
 
 def process_pdf(paths):
     '''Process pages of the untrusted PDF file'''
     page = 1
 
-    pages = get_page_count(paths.pdf)
-    send(pages)
+    untrusted_pages = get_page_count(paths.pdf)
+    send(untrusted_pages)
 
-    while (page <= pages):
+    while (page <= untrusted_pages):
         pdf_to_png(page, paths.pdf, paths.png)
         send_dimensions(paths.png)
-        png_to_rgb(paths.png, paths.rgb)
+        png_to_rgb(page, paths.png, paths.rgb)
         send_rgb_file(paths.rgb)
         page += 1
 

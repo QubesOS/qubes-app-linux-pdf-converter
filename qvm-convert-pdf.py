@@ -34,24 +34,25 @@ def die(msg):
     logging.error(msg)
     sys.exit(1)
 
-def check_pdf_paths(pdfs):
-    for pdf in pdfs:
-        if not os.path.exists(pdf):
-            die(f'{pdf}: No such file')
-        elif not os.path.isfile(pdf):
-            die(f'{pdf}: Not a regular file')
+def check_pdf_paths(untrusted_paths):
+    for untrusted_path in untrusted_paths:
+        if not os.path.exists(untrusted_path):
+            die(f'{untrusted_path}: No such file')
+        elif not os.path.isfile(untrusted_path):
+            die(f'{untrusted_path}: Not a regular file')
 
 def main():
     if len(sys.argv) == 1:
         die(f'usage: {PROG_NAME} [FILE ...]')
 
-    check_pdf_paths(sys.argv[1:])
+    untrusted_pdf_paths = sys.argv[1:]
+    check_pdf_paths(untrusted_pdf_paths)
 
-    # TODO: Handle os.execl() error (maybe with os._exit(127)
+    # TODO: Handle os.execl() error (maybe with os._exit(127))
     cmd = [QREXEC_CLIENT, '$dispvm', 'qubes.PdfConvert',
-           '/usr/lib/qubes/qpdf-convert-client', *untrusted_pdfs]
+           '/usr/lib/qubes/qpdf-convert-client', *untrusted_pdf_paths]
     os.execvp(QREXEC_CLIENT, cmd)
 
 if __name__ == '__main__':
-    # No need to wrap this in a try block since we never return from execl()
+    # No need to wrap this in a try block since we never return from execvp()
     main()
