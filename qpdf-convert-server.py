@@ -56,9 +56,18 @@ def send_b(data):
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
 
-def recv_b():
+def recv():
+    '''Qrexec wrapper for receiving text data from a client'''
+    try:
+        untrusted_data = input()
+    except EOFError:
+        sys.exit(1)
+
+    return untrusted_data
+
+def recv_b(size=None):
     '''Qrexec wrapper for receiving binary data from a client'''
-    untrusted_data = sys.stdin.buffer.read()
+    untrusted_data = sys.stdin.buffer.read(size)
     return untrusted_data
 
 
@@ -135,8 +144,10 @@ def create_tmp_files():
 ###############################
 
 def recv_pdf(pdf_path):
+    filesize = int(recv())
+    untrusted_data = recv_b(filesize)
+
     with open(pdf_path, 'wb') as f:
-        untrusted_data = recv_b()
         f.write(untrusted_data)
 
 def get_page_count(pdf_path):
@@ -175,8 +186,20 @@ def process_pdf(paths):
 
 def main():
     paths = create_tmp_files()
-    recv_pdf(paths.pdf)
-    process_pdf(paths)
+
+    # FIXME:
+    #   When no more PDFs are available to process, the server will exit in
+    #   recv() (called in recv_pdf()) with an EOFError. While this works
+    #   perfectly fine, it is kinda ugly; successful runs shouldn't exit with an
+    #   error, no?
+    #
+    #   One solution would be to have the client initially send a
+    #   space-delimited string containing the sizes of each file. Then, the
+    #   server can turn that into an array and use the array's length as the
+    #   number of times to loop.
+    while True:
+        recv_pdf(paths.pdf)
+        process_pdf(paths)
 
 if __name__ == '__main__':
     try:

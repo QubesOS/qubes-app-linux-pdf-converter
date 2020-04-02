@@ -25,6 +25,7 @@ import os
 from PIL import Image
 import subprocess
 import sys
+import time
 from tempfile import NamedTemporaryFile
 
 PROG_NAME = os.path.basename(sys.argv[0])
@@ -74,10 +75,9 @@ def recv():
 
     return untrusted_data
 
-def recv_b():
+def recv_b(size=None):
     '''Qrexec wrapper for receiving binary data from a client'''
-    # TODO: Does this raise EOFError like in recv()?
-    untrusted_data = sys.stdin.buffer.read()
+    untrusted_data = sys.stdin.buffer.read(size)
     return untrusted_data
 
 def check_range(val, upper):
@@ -135,8 +135,7 @@ def recv_rgb_file(rgb_path, untrusted_size):
     # background.save('foo.jpg', 'JPEG', quality=80)
 
     with open(rgb_path, 'wb') as f:
-        # FIXME: Why can't we get this in pure Python????? This isn't
-        # Windows-compatible
+        # FIXME: Why doesn't this work in pure Python?
         cmd = ['head', '-c', str(untrusted_size)]
         subprocess.run(cmd, stdout=f, check=True)
 
@@ -181,10 +180,23 @@ def recv_page_count():
     return untrusted_page_count
 
 def send_pdf(untrusted_pdf_path):
-    info('Sending file to a Disposable VM...')
+    info(f'Sending {untrusted_pdf_path} to a Disposable VM...')
+
+    # To process multiple files, we have to avoid closing STDIN since we can't
+    # reopen it afterwards without duplicating it to some new fd which doesn't
+    # seem ideal. Unfortunately, unless STDIN is being read from a terminal, I
+    # couldn't find a way to indicate to the server that we were done sending
+    # stuff.
+    #
+    # So, the current solution is to send file's size in advance so that the
+    # server can know when to stop reading from STDIN. The problem then becomes
+    # that the server may start its read after we send the PDF file.  Thus, we
+    # make the client sleep so that the server can start its read beforehand.
+    send(os.path.getsize(untrusted_pdf_path))
+    time.sleep(0.1)
+
     with open(untrusted_pdf_path, 'rb') as f:
         send_b(f.read())
-    os.close(sys.__stdout__.fileno())
 
 def archive_pdf(untrusted_pdf_path):
     archived_pdf_path = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf_path)}'
@@ -211,8 +223,7 @@ def process_pdf(untrusted_pdf_path, untrusted_page_count):
     else:
         info('')
 
-    # TODO: Maybe it'd be better to save->delete png over and over again to
-    # avoid storing all PNGs in memory
+    # TODO (?): Save->delete PNGs in a loop to avoid storing all PNGs in memory.
     images[0].save(pdf_path, 'PDF', resolution=100.0, save_all=True,
                    append_images=images[1:])
 
@@ -223,12 +234,15 @@ def process_pdf(untrusted_pdf_path, untrusted_page_count):
     info(f'Converted PDF saved as: {pdf_path}')
 
 def process_pdfs(untrusted_pdf_paths):
-    # TODO: Remove [0] when support for multiple PDFs is available
-    # for untrusted_pdf_path in untrusted_pdf_paths:
-    send_pdf(untrusted_pdf_paths[0])
-    untrusted_page_count = recv_page_count()
-    process_pdf(untrusted_pdf_paths[0], untrusted_page_count)
-    archive_pdf(untrusted_pdf_paths[0])
+    # TODO (?): Add check for duplicate filenames
+    for untrusted_pdf_path in untrusted_pdf_paths:
+        send_pdf(untrusted_pdf_path)
+        untrusted_page_count = recv_page_count()
+        process_pdf(untrusted_pdf_path, untrusted_page_count)
+        archive_pdf(untrusted_pdf_path)
+
+        if untrusted_pdf_path != untrusted_pdf_paths[-1]:
+            info('')
 
 
 ###############################

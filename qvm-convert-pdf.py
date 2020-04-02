@@ -45,7 +45,7 @@ def main():
     if len(sys.argv) == 1:
         die(f'usage: {PROG_NAME} [FILE ...]')
 
-    untrusted_pdf_paths = sys.argv[1:]
+    untrusted_pdf_paths = [os.path.abspath(path) for path in sys.argv[1:]]
     check_pdf_paths(untrusted_pdf_paths)
 
     # TODO: Handle os.execl() error (maybe with os._exit(127))
