@@ -66,18 +66,14 @@ def send_b(data):
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
 
-def recv():
-    '''Qrexec wrapper for receiving text data from a client'''
-    try:
-        untrusted_data = input()
-    except EOFError:
-        sys.exit(1)
-
+def recv_b(size=None):
+    '''Qrexec wrapper for receiving data from the server'''
+    untrusted_data = sys.stdin.buffer.read(size)
     return untrusted_data
 
-def recv_b(size=None):
-    '''Qrexec wrapper for receiving binary data from a client'''
-    untrusted_data = sys.stdin.buffer.read(size)
+def recvline_b():
+    '''Qrexec wrapper for receiving a line of data from the server'''
+    untrusted_data = sys.stdin.buffer.readline()
     return untrusted_data
 
 def check_range(val, upper):
@@ -94,8 +90,12 @@ def mkdir_archive():
 ###############################
 
 def recv_img_measurements():
-    '''Receive image measurements for a PDF page from server'''
-    untrusted_measurements = recv().split(' ', 2)
+    '''Receive the width and height of a PDF page from server'''
+    untrusted_measurements = recvline_b().decode().split(' ', 2)
+
+    if len(untrusted_measurements) != 2:
+        raise ValueError
+
     return [int(untrusted_value) for untrusted_value in untrusted_measurements]
 
 def get_img_size(untrusted_width, untrusted_height):
@@ -172,7 +172,7 @@ def convert_rgb_file(untrusted_dimensions, page):
 
 def recv_page_count():
     try:
-        untrusted_page_count = int(recv())
+        untrusted_page_count = int(recvline_b().decode())
         check_range(untrusted_page_count, MAX_PAGES)
     except ValueError:
         die("Invalid number of pages returned... aborting!")
@@ -211,14 +211,10 @@ def process_pdf(untrusted_pdf_path, untrusted_page_count):
     info("Waiting for converted sample...")
 
     while page <= untrusted_page_count:
-        untrusted_dimensions = get_img_dimensions()
-
         info(f'Receiving page {page}/{untrusted_page_count}...', '\r')
-
-        # TODO: There's some weird verbose condition here in the og script
+        untrusted_dimensions = get_img_dimensions()
         png_path = convert_rgb_file(untrusted_dimensions, page)
         images.append(Image.open(png_path))
-
         page += 1
     else:
         info('')

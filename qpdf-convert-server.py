@@ -56,18 +56,14 @@ def send_b(data):
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
 
-def recv():
-    '''Qrexec wrapper for receiving text data from a client'''
-    try:
-        untrusted_data = input()
-    except EOFError:
-        sys.exit(1)
-
+def recv_b(size=None):
+    '''Qrexec wrapper for receiving data from a client'''
+    untrusted_data = sys.stdin.buffer.read(size)
     return untrusted_data
 
-def recv_b(size=None):
-    '''Qrexec wrapper for receiving binary data from a client'''
-    untrusted_data = sys.stdin.buffer.read(size)
+def recvline_b():
+    '''Qrexec wrapper for receiving a line of data from a client'''
+    untrusted_data = sys.stdin.buffer.readline()
     return untrusted_data
 
 
@@ -144,7 +140,7 @@ def create_tmp_files():
 ###############################
 
 def recv_pdf(pdf_path):
-    filesize = int(recv())
+    filesize = int(recvline_b().decode())
     untrusted_data = recv_b(filesize)
 
     with open(pdf_path, 'wb') as f:
