@@ -190,61 +190,25 @@ async def send(proc, data):
 ###############################
 
 
+async def get_img_dim(proc):
     try:
-        untrusted_width, untrusted_height = recv_img_measurements()
-        check_range(untrusted_width, MAX_IMG_WIDTH)
-        check_range(untrusted_height, MAX_IMG_HEIGHT)
-    except ValueError:
-        die("Invalid image geometry returned... aborting!")
-
-    untrusted_size = get_img_size(untrusted_width, untrusted_height)
-    Dimensions = namedtuple('Dimensions', ['width', 'height', 'depth', 'size'])
-
-    return Dimensions(width=untrusted_width, height=untrusted_height,
-                      size=untrusted_size, depth=depth)
-
-def recv_rgb_file(rgb_path, untrusted_size):
-    # XXX: For some reason, this leaves us missing alot of bytes
-    # rcvd_bytes = input().encode('utf-8', 'surrogateescape')
-    # rcvd_bytes = rcvd_bytes[:dimensions.size]
-
-    # XXX: Example of using PIL for performant PNG -> JPG. Maybe use this?
-    # png = Image.open(object.logo.path)
-    # png.load() # required for png.split()
-    # background = Image.new("RGB", png.size, (255, 255, 255))
-    # background.paste(png, mask=png.split()[3]) # 3 is the alpha channel
-    # background.save('foo.jpg', 'JPEG', quality=80)
-
-    with open(rgb_path, 'wb') as f:
-        # FIXME: Why doesn't this work in pure Python?
-        cmd = ['head', '-c', str(untrusted_size)]
-        subprocess.run(cmd, stdout=f, check=True)
-
-        if os.path.getsize(f.name) != untrusted_size:
-            os.remove(rgb_path)
-            die('Invalid number of bytes in RGB file... aborting!')
-
-def rgb_to_png(rgb_path, png_path, untrusted_dimensions, page):
-    cmd = ['convert', '-size',
-           f'{untrusted_dimensions.width}x{untrusted_dimensions.height}',
-           '-depth', str(untrusted_dimensions.depth), f'rgb:{rgb_path}',
-           f'png:{png_path}']
+        untrusted_w, untrusted_h = map(int, (await recvline(proc)).split(" ", 1))
+    except (AttributeError, EOFError, UnicodeError) as e:
+        raise ReceiveError from e
 
     try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
-        die(f'Page {page} conversion failed (RGB->PNG)... aborting!')
+        check_range(untrusted_w, MAX_IMG_WIDTH)
+        check_range(untrusted_h, MAX_IMG_HEIGHT)
+    except ValueError as e:
+        logging.error(f"invalid image measurements received {e}")
+        raise DimensionError from e
     else:
-        os.remove(rgb_path)
+        width = untrusted_w
+        height = untrusted_h
 
-def convert_rgb_file(untrusted_dimensions, page):
-    with NamedTemporaryFile(prefix='qpdf-conversion-') as f:
-        rgb_path = f'{f.name}-{page}.rgb'
-        png_path = f'{f.name}-{page}.png'
-        recv_rgb_file(rgb_path, untrusted_dimensions.size)
-        rgb_to_png(rgb_path, png_path, untrusted_dimensions, page)
+    size = width * height * 3
 
-    return png_path
+    return Dimensions(width=width, height=height, size=size, depth=DEPTH)
 
 
 ###############################
