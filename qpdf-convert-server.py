@@ -125,71 +125,82 @@ def send(data):
 
 
 ###############################
+#         Rep-related
+###############################
+
+
+def get_rep(tmpdir, page, initial, final):
+    """Create temporary file for page representations"""
+    name = Path(tmpdir, f"{page}")
+    return Representation(initial=name.with_suffix(f".{initial}"),
+                          final=name.with_suffix(f".{final}"))
+
+
+###############################
 #        Image-related
 ###############################
 
-def send_img_dimensions(png_path):
-    cmd_width = ['identify', '-format', '%w', png_path]
-    cmd_height = ['identify', '-format', '%h', png_path]
+
+async def get_irep(pdfpath, irep, page):
+    cmd = ["pdftocairo", f"{pdfpath}", "-png", "-f", f"{page}", "-l",
+           f"{page}", "-singlefile", f"{Path(irep.parent, irep.stem)}"]
 
     try:
-        untrusted_width = subprocess.run(cmd_width, capture_output=True,
-                                         check=True).stdout.decode()
-        untrusted_height = subprocess.run(cmd_height, capture_output=True,
-                                         check=True).stdout.decode()
+        proc = await asyncio.create_subprocess_exec(*cmd)
+        await wait_proc(proc)
+    except asyncio.CancelledError:
+        terminate_proc(proc)
+        raise
     except subprocess.CalledProcessError:
-        die("Failed to gather dimensions... Aborting")
+        raise
 
-    send(f'{untrusted_width} {untrusted_height}')
 
-def send_rgb_file(rgb_path):
-    with open(rgb_path, 'rb') as f:
-        data = f.read()
-        send_b(data)
-
-def pdf_to_png(pagenum, pdf_path, png_path):
-    png_filename = os.path.splitext(png_path)[0]
-    cmd = ['pdftocairo', pdf_path, '-png', '-f', str(pagenum), '-l',
-           str(pagenum), '-singlefile', png_filename]
+async def get_img_dim(irep):
+    cmd = ["identify", "-format", "'%w %h'", f"{irep}"]
 
     try:
-        subprocess.run(cmd, check=True)
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE)
+        output, _ = await proc.communicate()
+    except asyncio.CancelledError:
+        terminate_proc(proc)
+        raise
     except subprocess.CalledProcessError:
-        cmd = ['convert', pdf_path, f'png:{png_path}']
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError:
-            die(f'Page {pagenum} conversion failed (PDF->PNG): {err}')
+        raise
 
-def png_to_rgb(pagenum, png_path, rgb_path):
-    depth = 8
-    cmd = ['convert', png_path, '-depth', str(depth), f'rgb:{rgb_path}']
+    return output.decode("ascii").replace("'", "")
+
+
+async def convert_rep(irep, frep):
+    cmd = ["convert", f"{irep}", "-depth", f"{DEPTH}", f"rgb:{frep}"]
 
     try:
-        subprocess.run(cmd, check=True)
+        proc =  await asyncio.create_subprocess_exec(*cmd)
+        await wait_proc(proc)
+    except asyncio.CancelledError:
+        terminate_proc(proc)
+        raise
     except subprocess.CalledProcessError:
-        die(f'Page {pagenum} conversion failed (PNG->RGB): {err}')
+        raise
 
 
-###############################
-#         File-related
-###############################
+async def render(loop, page, pdfpath, rep):
+    try:
+        irep_task = asyncio.create_task(get_irep(pdfpath, rep.initial, page))
+        await irep_task
 
-def create_tmp_files():
-    '''Create temporary file for storing page images and the untrusted PDF'''
-    Files = namedtuple('Files', ['pdf', 'png', 'rgb'])
-    suffixes = ('', '.png', '.rgb')
-    paths = []
+        dim_task = asyncio.create_task(get_img_dim(rep.initial))
+        convert_task = asyncio.create_task(convert_rep(rep.initial, rep.final))
+        dim, _ = await asyncio.gather(dim_task, convert_task)
+    except subprocess.CalledProcessError:
+        raise
+    except asyncio.CancelledError:
+        cancel_task(irep_task)
+        cancel_task(dim_task)
+        cancel_task(convert_task)
+    finally:
+        await loop.run_in_executor(None, unlink, rep.initial)
 
-    for suffix in suffixes:
-        with NamedTemporaryFile(prefix='qpdf-conversion-', suffix=suffix) as f:
-            paths.append(f.name)
-
-    for path in paths:
-        with open(path, 'wb') as f:
-            f.write(b'')
-
-    return Files(pdf=paths[0], png=paths[1], rgb=paths[2])
+    return (dim, rep.final)
 
 
 ###############################
@@ -225,25 +236,61 @@ def get_pagenums(pdfpath):
 #            Main
 ###############################
 
+
+async def run(loop, tmpdir, pdfpath, pagenums, max_tasks=0):
+    results = []
+    tasks = []
+    limit = max_tasks if max_tasks > 0 else pagenums
+
+    for page in range(1, limit + 1):
+        rep = get_rep(tmpdir, page, "png", "rgb")
+        tasks.append(asyncio.create_task(render(loop, page, pdfpath, rep)))
+
+    for task in tasks:
+        try:
+            results.append(await task)
+        except subprocess.CalledProcessError:
+            for task in tasks:
+                task.cancel()
+
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            raise
+
+    for dim, frep in results:
+        send(dim)
+        send_b(await loop.run_in_executor(None, frep.read_bytes))
+        await loop.run_in_executor(None, unlink, frep)
+
+
 def main():
-    paths = create_tmp_files()
+    logging.basicConfig(format="DispVM: %(message)s")
 
-    # FIXME:
-    #   When no more PDFs are available to process, the server will exit in
-    #   recv() (called in recv_pdf()) with an EOFError. While this works
-    #   perfectly fine, it is kinda ugly; successful runs shouldn't exit with an
-    #   error, no?
-    #
-    #   One solution would be to have the client initially send a
-    #   space-delimited string containing the sizes of each file. Then, the
-    #   server can turn that into an array and use the array's length as the
-    #   number of times to loop.
-    while True:
-        recv_pdf(paths.pdf)
-        process_pdf(paths)
-
-if __name__ == '__main__':
     try:
-        main()
-    except KeyboardInterrupt:
-        die("KeyboardInterrupt... Aborting!")
+        data = recv_pdf()
+    except (ReceiveError, ValueError):
+        sys.exit(1)
+
+    with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
+        pdfpath = Path(tmpdir, "original")
+        pdfpath.write_bytes(data)
+
+        try:
+            pagenums = get_pagenums(pdfpath)
+            send(pagenums)
+        except subprocess.CalledProcessError:
+            sys.exit(1)
+
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(run(loop, tmpdir, pdfpath, pagenums, 0))
+        except subprocess.CalledProcessError:
+            sys.exit(1)
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+
+
+if __name__ == "__main__":
+    main()

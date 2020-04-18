@@ -29,8 +29,8 @@ from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
 
-PROG_NAME = os.path.basename(sys.argv[0])
-ARCHIVE_PATH = f"{os.path.expanduser('~')}/QubesUntrustedPDFs"
+PROG_NAME = Path(sys.argv[0]).name
+ARCHIVE_PATH = Path(Path.home(), "QubesUntrustedPDFs")
 
 MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
@@ -244,31 +244,184 @@ async def recv_pagenums(loop, proc):
     return pagenums
 
 
-    info(f'Converted PDF saved as: {pdf_path}')
+def archive(path):
+    archive_path = Path(ARCHIVE_PATH, path.name)
+    path.rename(archive_path)
+    print(f"Original PDF saved as: {archive_path}")
 
-def process_pdfs(untrusted_pdf_paths):
-    # TODO (?): Add check for duplicate filenames
-    for untrusted_pdf_path in untrusted_pdf_paths:
-        send_pdf(untrusted_pdf_path)
-        untrusted_page_count = recv_page_count()
-        process_pdf(untrusted_pdf_path, untrusted_page_count)
-        archive_pdf(untrusted_pdf_path)
 
-        if untrusted_pdf_path != untrusted_pdf_paths[-1]:
-            info('')
+###############################
+#    Representation-related
+###############################
+
+
+def get_rep(tmpdir, page, initial, final):
+    name = Path(tmpdir, str(page))
+    return Representation(initial=name.with_suffix(f".{initial}"),
+                          final=name.with_suffix(f".{final}"))
+
+
+def save_rep(rep, data, size):
+    if rep.initial.write_bytes(data) != size:
+        logging.error("inconsistent initial representation file size")
+        raise RepresentationError
+
+
+async def recv_rep(loop, proc, tmpdir, page):
+    """Receive initial representation from the server
+
+    :param proc: Qrexec process to read STDIN from
+    :param path: File path which will store the initial representation
+    """
+    rep = get_rep(tmpdir, page, "rgb", "png")
+
+    try:
+        dim = await get_img_dim(proc)
+        data = await recv_b(proc, dim.size)
+        await loop.run_in_executor(None, save_rep, rep, data, dim.size)
+    except EOFError as e:
+        raise ReceiveError from e
+    except (DimensionError, ReceiveError, RepresentationError):
+        raise
+
+    return rep, dim
+
+
+async def start_convert(rep, dim):
+    cmd = ["convert", "-size", f"{dim.width}x{dim.height}", "-depth",
+            f"{dim.depth}", f"rgb:{rep.initial}", f"png:{rep.final}"]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(*cmd)
+        await wait_proc(proc)
+    except asyncio.CancelledError:
+        terminate_proc(proc)
+
+    return proc
+
+
+# TODO (?): Save->delete PNGs in loop to avoid storing all PNGs in memory.
+# TODO: Add error handling
+def combine_reps(save_path, reps):
+    with Image.open(reps[0].final) as first:
+        remaining = [Image.open(rep.final) for rep in reps[1:]]
+        first.save(save_path, "PDF", resolution=100, append_images=remaining,
+                   save_all=True)
+
+    for img in remaining:
+        img.close()
 
 
 ###############################
 #           Main
 ###############################
 
-def main():
-    untrusted_pdf_paths = sys.argv[1:]
-    mkdir_archive()
-    process_pdfs(untrusted_pdf_paths)
+async def receive(loop, proc, tmpdir):
+    procs = []
+    reps = []
 
-if __name__ == '__main__':
     try:
-        main()
+        pagenums = await recv_pagenums(loop, proc)
+    except (PageError, ReceiveError):
+        raise
+
+    for page in range(1, pagenums + 1):
+        try:
+            rep, dim = await recv_rep(loop, proc, tmpdir, page)
+        except (DimensionError, ReceiveError, RepresentationError):
+            term_tasks = [terminate_proc(p) for p in procs]
+            await asyncio.gather(*term_tasks)
+            raise
+
+        reps.append(rep)
+        procs.append(await start_convert(rep, dim))
+
+    return procs, reps
+
+
+async def convert(loop, path, procs, reps):
+    for proc, rep in zip(procs, reps):
+        try:
+            await wait_proc(proc)
+        except subprocess.CalledProcessError:
+            logging.error("page conversion failed")
+            raise
+
+        await loop.run_in_executor(None, unlink, rep.initial)
+
+    save_path = path.with_suffix(".trusted.pdf")
+    await loop.run_in_executor(None, combine_reps, save_path, reps)
+
+    return save_path
+
+
+async def sanitize(loop, proc, path):
+    with TemporaryDirectory(prefix=f"qvm-sanitize-{proc.pid}-") as tmpdir:
+        try:
+            convert_procs, reps = await receive(loop, proc, tmpdir)
+        except (DimensionError, PageError, ReceiveError, RepresentationError):
+            raise
+
+        try:
+            pdf = await convert(loop, path, convert_procs, reps)
+        except (asyncio.CancelledError, subprocess.CalledProcessError):
+            for proc in convert_procs:
+                terminate_proc(proc)
+            raise
+
+    print(f"\nConverted PDF saved as: {pdf}")
+
+
+# TODO: KeyboardInterrupt
+async def run(loop, paths):
+    cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
+    procs = []
+    send_tasks = []
+    sanitize_tasks = []
+
+    print("Sending files to Disposable VMs...")
+
+    for path in paths:
+        proc = await asyncio.create_subprocess_exec(*cmd,
+                                                    stdin=subprocess.PIPE,
+                                                    stdout=subprocess.PIPE)
+        procs.append(proc)
+        send_tasks.append(asyncio.create_task(send_pdf(loop, proc, path)))
+        sanitize_tasks.append(asyncio.create_task(sanitize(loop, proc, path)))
+
+    for proc, path, send_task, sanitize_task in zip(procs, paths, send_tasks,
+                                                    sanitize_tasks):
+        try:
+            await asyncio.gather(send_task,
+                                 sanitize_task,
+                                 wait_proc(proc))
+        except (BrokenPipeError, DimensionError, PageError, ReceiveError,
+                RepresentationError, subprocess.CalledProcessError):
+            await asyncio.gather(cancel_task(send_task),
+                                 cancel_task(sanitize_task))
+            await terminate_proc(proc)
+        else:
+            await loop.run_in_executor(None, archive, path)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if len(sys.argv) == 1:
+        print(f"usage: {PROG_NAME} [FILE ...]", file=sys.stderr)
+        sys.exit(1)
+
+    paths = check_paths(sys.argv[1:])
+    Path.mkdir(ARCHIVE_PATH, exist_ok=True)
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run(loop, paths))
     except KeyboardInterrupt:
-        die("KeyboardInterrupt... Aborting!")
+        logging.error("Original file untouched.")
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+
+
+if __name__ == "__main__":
+    main()
