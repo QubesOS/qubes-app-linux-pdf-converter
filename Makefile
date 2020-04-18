@@ -23,15 +23,12 @@ RPMS_DIR=rpm/
 VERSION := $(shell cat version)
 
 help:
-	@echo "Qubes addons main Makefile:" ;\
-	    echo "make rpms                 <--- make rpms and sign them";\
-	    echo; \
-	    echo "make clean                <--- clean all the binary files";\
-	    echo "make update-repo-current  <-- copy newly generated rpms to qubes yum repo";\
-	    echo "make update-repo-current-testing <-- same, but for -current-testing repo";\
-	    echo "make update-repo-unstable <-- same, but to -testing repo";\
-	    echo "make update-repo-installer -- copy dom0 rpms to installer repo"
-	    @exit 0;
+	@echo "make rpms                        -- generate signed rpm packages"
+	@echo "make update-repo-current         -- copy newly generated rpms to qubes yum repo"
+	@echo "make update-repo-current-testing -- same, but for -current-testing repo"
+	@echo "make update-repo-unstable        -- same, but to -testing repo"
+	@echo "make update-repo-installer       -- copy dom0 rpms to installer repo"
+	@echo "make clean                       -- clean up binary files"
 
 rpms: rpms-vm
 
@@ -78,9 +75,8 @@ build:
 
 install-vm:
 	make install -C doc
-	install -D qvm-convert-pdf.py $(DESTDIR)/usr/bin/qvm-convert-pdf
-	install -D qpdf-convert-client.py $(DESTDIR)/usr/lib/qubes/qpdf-convert-client
-	install -D qpdf-convert-server.py $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
+	install -D pdf-converter/client.py $(DESTDIR)/usr/bin/qvm-convert-pdf
+	install -D pdf-converter/server.py $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
 	install -d $(DESTDIR)/etc/qubes-rpc
 	ln -s ../../usr/lib/qubes/qpdf-convert-server $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf.gnome $(DESTDIR)/usr/lib/qubes/qvm-convert-pdf.gnome

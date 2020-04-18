@@ -26,4 +26,4 @@ fi
 
 export PROGRESS_FOR_GUI="yes"
 
-/usr/lib/qubes/qrexec_client_vm '$dispvm' qubes.PdfConvert /usr/lib/qubes/qpdf-convert-client "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
+/usr/bin/qvm-convert-pdf "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill

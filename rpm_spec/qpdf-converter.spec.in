@@ -56,7 +56,6 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root,-)
 /etc/qubes-rpc/qubes.PdfConvert
-/usr/lib/qubes/qpdf-convert-client
 /usr/lib/qubes/qpdf-convert-server
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
