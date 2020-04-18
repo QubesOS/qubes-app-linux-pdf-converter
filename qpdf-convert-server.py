@@ -46,38 +46,83 @@ class ReceiveError(Exception):
 #         Utilities
 ###############################
 
-def info(msg, suffix=None):
-    '''Qrexec wrapper for displaying information
 
-    `suffix` is typically only ever used when `msg` needs to overwrite
-    the line of the previous message (so as to imitate an updating
-    line). This is done by setting `suffix` to '\r'.
-    '''
+def info(msg, suffix=None):
+    """Qrexec wrapper for displaying information on the client
+
+    @suffix is really only ever used when @msg needs to overwrite the line of
+    the previous message (imitating an updating line). This is done by setting
+    @suffix to "\r".
+    """
     print(msg, end=suffix, flush=True, file=sys.stderr)
 
-def die(msg):
-    '''Qrexec wrapper for displaying error messages'''
-    logging.error(msg)
-    sys.exit(1)
 
-def send(data):
-    '''Qrexec wrapper for sending text data to the client's STDOUT'''
-    print(data, flush=True)
+def unlink(path):
+    """Wrapper for Path.unlink(path, missing_ok=True)"""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+async def cancel_task(task):
+    if not task.done():
+        task.cancel()
+        await task
+
+
+async def wait_proc(proc):
+    await proc.wait()
+    if proc.returncode:
+        raise subprocess.CalledProcessError
+
+
+async def terminate_proc(proc):
+    if proc.returncode is None:
+        proc.terminate()
+        await proc.wait()
+
+
+###############################
+#       Qrexec-related
+###############################
+
+
+def recv_b(size):
+    """Qrexec wrapper for receiving binary data from the client"""
+    try:
+        untrusted_data = sys.stdin.buffer.read(size)
+    except EOFError as e:
+        raise ReceiveError from e
+
+    if not untrusted_data:
+        raise ReceiveError
+
+    return untrusted_data
+
+
+def recvline():
+    """Qrexec wrapper for receiving a line of text data from the client"""
+    try:
+        untrusted_data = sys.stdin.buffer.readline().decode("ascii")
+    except (AttributeError, EOFError, UnicodeError) as e:
+        raise ReceiveError from e
+
+    return untrusted_data
+
 
 def send_b(data):
-    '''Qrexec wrapper for sending binary data to the client's STDOUT'''
+    """Qrexec wrapper for sending binary data to the client's STDOUT"""
+    if isinstance(data, (str, int)):
+        data = str(data).encode()
+
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
 
-def recv_b(size=None):
-    '''Qrexec wrapper for receiving data from a client'''
-    untrusted_data = sys.stdin.buffer.read(size)
-    return untrusted_data
 
-def recvline_b():
-    '''Qrexec wrapper for receiving a line of data from a client'''
-    untrusted_data = sys.stdin.buffer.readline()
-    return untrusted_data
+def send(data):
+    """Qrexec wrapper for sending text data to the client's STDOUT"""
+    print(data, flush=True)
 
 
 ###############################

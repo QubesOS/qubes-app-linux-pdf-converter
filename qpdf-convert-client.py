@@ -19,10 +19,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from collections import namedtuple
+import asyncio
 import logging
 import os
-from PIL import Image
 import subprocess
 import sys
 from collections import namedtuple
@@ -66,71 +65,130 @@ class RepresentationError(ValueError):
 #         Utilities
 ###############################
 
-def info(msg, suffix=None):
-    '''Qrexec wrapper for displaying information
 
-    `suffix` is typically only ever used when `msg` needs to overwrite
-    the line of the previous message (so as to imitate an updating
-    line). This is done by setting `suffix` to '\r'.
-    '''
-    print(msg, end=suffix, flush=True, file=sys.stderr)
+def check_paths(paths):
+    abs_paths = []
 
-def die(msg):
-    '''Qrexec wrapper for displaying error messages'''
-    logging.error(msg)
-    sys.exit(1)
+    for path in [Path(path) for path in paths]:
+        abspath = Path.resolve(path)
 
-def send(data):
-    '''Qrexec wrapper for sending text data to the client's STDOUT'''
-    print(data, flush=True)
+        if not abspath.exists():
+            logging.error(f"No such file: \"{path}\"")
+            sys.exit(1)
+        elif not abspath.is_file():
+            logging.error(f"Not a regular file: \"{path}\"")
+            sys.exit(1)
 
-def send_b(data):
-    '''Qrexec wrapper for sending binary data to the client's STDOUT'''
-    sys.stdout.buffer.write(data)
-    sys.stdout.buffer.flush()
+        abs_paths.append(abspath)
 
-def recv_b(size=None):
-    '''Qrexec wrapper for receiving data from the server'''
-    untrusted_data = sys.stdin.buffer.read(size)
-    return untrusted_data
+    return abs_paths
 
-def recvline_b():
-    '''Qrexec wrapper for receiving a line of data from the server'''
-    untrusted_data = sys.stdin.buffer.readline()
-    return untrusted_data
 
 def check_range(val, upper):
     if not 1 <= val <= upper:
         raise ValueError
 
-def mkdir_archive():
-    if not os.path.exists(ARCHIVE_PATH):
-        os.mkdir(ARCHIVE_PATH)
+
+def unlink(path):
+    """Wrapper for Path.unlink(path, missing_ok=True)"""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+async def cancel_task(task):
+    if not task.done():
+        task.cancel()
+        await task
+
+
+async def wait_proc(proc):
+    await proc.wait()
+    if proc.returncode:
+        raise subprocess.CalledProcessError
+
+
+async def terminate_proc(proc):
+    if proc.returncode is None:
+        proc.terminate()
+        await proc.wait()
+
+
+###############################
+#       Qrexec-related
+###############################
+
+
+async def recv_b(proc, size):
+    """Qrexec wrapper for receiving binary data from the server"""
+    try:
+        untrusted_data = await proc.stdout.readexactly(size)
+    except asyncio.IncompleteReadError:
+        logging.error("server may have died...")
+        raise
+
+    if not untrusted_data:
+        raise EOFError
+
+    return untrusted_data
+
+
+# TODO (?): Size limit for readline()
+async def recvline_b(proc):
+    """Qrexec wrapper for receiving a line of binary data from the server"""
+    untrusted_data = await proc.stdout.readline()
+
+    if not untrusted_data:
+        raise EOFError
+
+    return untrusted_data
+
+
+async def recv(proc, size):
+    """Convenience wrapper for receiving text data from the server"""
+    try:
+        untrusted_data = (await recv_b(proc, size)).decode()
+    except EOFError:
+        raise
+    except (AttributeError, UnicodeError):
+        logging.error("failed to decode received data!")
+        raise
+
+    return untrusted_data
+
+
+async def recvline(proc):
+    """Convenience wrapper for receiving a line of text data from the server"""
+    try:
+        untrusted_data = (await recvline_b(proc)).decode("ascii").rstrip()
+    except EOFError:
+        raise
+    except (AttributeError, UnicodeError):
+        logging.error("failed to decode received data!")
+        raise
+
+    return untrusted_data
+
+
+async def send(proc, data):
+    """Qrexec wrapper for sending data to the server"""
+    if isinstance(data, (str, int)):
+        data = str(data).encode()
+
+    proc.stdin.write(data + b"\n")
+    try:
+        await proc.stdin.drain()
+    except BrokenPipeError:
+        # logging.error("server may have died")
+        raise
+
 
 
 ###############################
 #        Image-related
 ###############################
 
-def recv_img_measurements():
-    '''Receive the width and height of a PDF page from server'''
-    untrusted_measurements = recvline_b().decode().split(' ', 2)
-
-    if len(untrusted_measurements) != 2:
-        raise ValueError
-
-    return [int(untrusted_value) for untrusted_value in untrusted_measurements]
-
-def get_img_size(untrusted_width, untrusted_height):
-    untrusted_size = untrusted_width * untrusted_height * 3
-
-    if untrusted_size > MAX_IMG_SIZE:
-        die("Calculated image size is too large... aborting!")
-
-    return untrusted_size
-
-def get_img_dimensions():
-    depth = 8
 
     try:
         untrusted_width, untrusted_height = recv_img_measurements()
