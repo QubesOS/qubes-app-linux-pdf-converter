@@ -25,8 +25,10 @@ import os
 from PIL import Image
 import subprocess
 import sys
-import time
-from tempfile import NamedTemporaryFile
+from collections import namedtuple
+from pathlib import Path
+from PIL import Image
+from tempfile import TemporaryDirectory
 
 PROG_NAME = os.path.basename(sys.argv[0])
 ARCHIVE_PATH = f"{os.path.expanduser('~')}/QubesUntrustedPDFs"
@@ -34,9 +36,30 @@ ARCHIVE_PATH = f"{os.path.expanduser('~')}/QubesUntrustedPDFs"
 MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
-MAX_IMG_SIZE = MAX_IMG_WIDTH * MAX_IMG_HEIGHT * 3
+DEPTH = 8
 
-logging.basicConfig(format='%(message)s', stream=sys.stderr)
+Dimensions = namedtuple("Dimensions", ["width", "height", "size", "depth"])
+Representation = namedtuple("Representations", ["initial", "final"])
+
+
+class DimensionError(ValueError):
+    """
+    """
+
+
+class PageError(ValueError):
+    """
+    """
+
+
+class ReceiveError(Exception):
+    """
+    """
+
+
+class RepresentationError(ValueError):
+    """
+    """
 
 
 ###############################

@@ -24,9 +24,22 @@ import logging
 import os
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile
+from collections import namedtuple
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-logging.basicConfig(format='%(message)s', stream=sys.stderr)
+DEPTH = 8
+
+Representation = namedtuple("Representation", ["initial", "final"])
+
+
+class ConversionError(Exception):
+    """
+    """
+
+class ReceiveError(Exception):
+    """
+    """
 
 
 ###############################
