@@ -77,7 +77,7 @@ def recvline_b():
     return untrusted_data
 
 def check_range(val, upper):
-    if (not 1 <= val <= upper) or (not 1 <= val <= upper):
+    if not 1 <= val <= upper:
         raise ValueError
 
 def mkdir_archive():
