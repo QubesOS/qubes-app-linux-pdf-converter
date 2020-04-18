@@ -19,9 +19,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from collections import namedtuple
+import asyncio
 import logging
-import os
 import subprocess
 import sys
 from collections import namedtuple
@@ -197,41 +196,29 @@ def create_tmp_files():
 #         PDF-related
 ###############################
 
-def recv_pdf(pdf_path):
-    filesize = int(recvline_b().decode())
-    untrusted_data = recv_b(filesize)
 
-    with open(pdf_path, 'wb') as f:
-        f.write(untrusted_data)
+def recv_pdf():
+    try:
+        filesize = int(recvline())
+        data = recv_b(filesize)
+    except (ReceiveError, ValueError):
+        raise
 
-def get_page_count(pdf_path):
-    untrusted_pages = 0
-    output = None
-    cmd = ['pdfinfo', pdf_path]
+    return data
+
+def get_pagenums(pdfpath):
+    cmd = ["pdfinfo", f"{pdfpath}"]
 
     try:
         output = subprocess.run(cmd, capture_output=True, check=True)
     except subprocess.CalledProcessError:
-        info(f'Probably not a PDF...')
-    else:
-        for line in output.stdout.decode().splitlines():
-            if 'Pages:' in line:
-                untrusted_pages = int(line.split(':')[1])
+        # TODO: Support converting JPGs and PNGs like the OG script
+        logging.error("file is probably not a PDF")
+        raise
 
-    return untrusted_pages
-
-def process_pdf(paths):
-    page = 1
-
-    untrusted_pages = get_page_count(paths.pdf)
-    send(untrusted_pages)
-
-    while (page <= untrusted_pages):
-        pdf_to_png(page, paths.pdf, paths.png)
-        send_img_dimensions(paths.png)
-        png_to_rgb(page, paths.png, paths.rgb)
-        send_rgb_file(paths.rgb)
-        page += 1
+    for line in output.stdout.decode("ascii").splitlines():
+        if "Pages:" in line:
+            return int(line.split(":")[1])
 
 
 ###############################

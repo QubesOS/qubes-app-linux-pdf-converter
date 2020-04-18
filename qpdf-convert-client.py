@@ -215,62 +215,34 @@ async def get_img_dim(proc):
 #         PDF-related
 ###############################
 
-def recv_page_count():
+
+async def send_pdf(loop, proc, path):
     try:
-        untrusted_page_count = int(recvline_b().decode())
-        check_range(untrusted_page_count, MAX_PAGES)
-    except ValueError:
-        die("Invalid number of pages returned... aborting!")
+        filesize = (await loop.run_in_executor(None, path.stat)).st_size
+        await send(proc, filesize)
 
-    return untrusted_page_count
+        data = await loop.run_in_executor(None, path.read_bytes)
+        await send(proc, data)
+    except BrokenPipeError:
+        raise
 
-def send_pdf(untrusted_pdf_path):
-    info(f'Sending {untrusted_pdf_path} to a Disposable VM...')
 
-    # To process multiple files, we have to avoid closing STDIN since we can't
-    # reopen it afterwards without duplicating it to some new fd which doesn't
-    # seem ideal. Unfortunately, unless STDIN is being read from a terminal, I
-    # couldn't find a way to indicate to the server that we were done sending
-    # stuff.
-    #
-    # So, the current solution is to send file's size in advance so that the
-    # server can know when to stop reading from STDIN. The problem then becomes
-    # that the server may start its read after we send the PDF file.  Thus, we
-    # make the client sleep so that the server can start its read beforehand.
-    send(os.path.getsize(untrusted_pdf_path))
-    time.sleep(0.1)
+async def recv_pagenums(loop, proc):
+    try:
+        untrusted_pagenums = int(await recvline(proc))
+    except (AttributeError, EOFError, UnicodeError, ValueError) as e:
+        raise ReceiveError from e
 
-    with open(untrusted_pdf_path, 'rb') as f:
-        send_b(f.read())
-
-def archive_pdf(untrusted_pdf_path):
-    archived_pdf_path = f'{ARCHIVE_PATH}/{os.path.basename(untrusted_pdf_path)}'
-    os.rename(untrusted_pdf_path, archived_pdf_path)
-    info(f'Original PDF saved as: {archived_pdf_path}')
-
-def process_pdf(untrusted_pdf_path, untrusted_page_count):
-    page = 1
-    images = []
-    pdf_path = f'{os.path.splitext(untrusted_pdf_path)[0]}.trusted.pdf'
-
-    info("Waiting for converted sample...")
-
-    while page <= untrusted_page_count:
-        info(f'Receiving page {page}/{untrusted_page_count}...', '\r')
-        untrusted_dimensions = get_img_dimensions()
-        png_path = convert_rgb_file(untrusted_dimensions, page)
-        images.append(Image.open(png_path))
-        page += 1
+    try:
+        check_range(untrusted_pagenums, MAX_PAGES)
+    except ValueError as e:
+        logging.error("invalid number of pages received")
+        raise PageError from e
     else:
-        info('')
+        pagenums = untrusted_pagenums
 
-    # TODO (?): Save->delete PNGs in a loop to avoid storing all PNGs in memory.
-    images[0].save(pdf_path, 'PDF', resolution=100.0, save_all=True,
-                   append_images=images[1:])
+    return pagenums
 
-    for img in images:
-        img.close()
-        os.remove(img.filename)
 
     info(f'Converted PDF saved as: {pdf_path}')
 
