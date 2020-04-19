@@ -175,11 +175,10 @@ async def send(proc, data):
     if isinstance(data, (str, int)):
         data = str(data).encode()
 
-    proc.stdin.write(data + b"\n")
+    proc.stdin.write(data)
     try:
         await proc.stdin.drain()
     except BrokenPipeError:
-        # logging.error("server may have died")
         raise
 
 
@@ -218,7 +217,7 @@ async def get_img_dim(proc):
 async def send_pdf(loop, proc, path):
     try:
         filesize = (await loop.run_in_executor(None, path.stat)).st_size
-        await send(proc, filesize)
+        await send(proc, f"{filesize}\n")
 
         data = await loop.run_in_executor(None, path.read_bytes)
         await send(proc, data)
