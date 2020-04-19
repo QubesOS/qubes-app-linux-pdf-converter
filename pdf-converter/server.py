@@ -156,7 +156,7 @@ async def get_irep(pdfpath, irep, page):
 
 
 async def get_img_dim(irep):
-    cmd = ["identify", "-format", "'%w %h'", f"{irep}"]
+    cmd = ["identify", "-format", "%w %h", f"{irep}"]
 
     try:
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE)
@@ -167,7 +167,7 @@ async def get_img_dim(irep):
     except subprocess.CalledProcessError:
         raise
 
-    return output.decode("ascii").replace("'", "")
+    return output.decode("ascii")
 
 
 async def convert_rep(irep, frep):
