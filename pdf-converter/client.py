@@ -124,12 +124,9 @@ async def recv_b(proc, size):
     """Qrexec wrapper for receiving binary data from the server"""
     try:
         untrusted_data = await proc.stdout.readexactly(size)
-    except asyncio.IncompleteReadError:
-        logging.error("server may have died...")
-        raise
-
-    if not untrusted_data:
-        raise EOFError
+    except asyncio.IncompleteReadError as e:
+        # got EOF before @size bytes received
+        raise ReceiveError from e
 
     return untrusted_data
 
@@ -140,30 +137,32 @@ async def recvline_b(proc):
     untrusted_data = await proc.stdout.readline()
 
     if not untrusted_data:
-        raise EOFError
+        logging.error("server may have died...")
+        raise ReceiveError
 
     return untrusted_data
 
 
-async def recv(proc, size):
-    """Convenience wrapper for receiving text data from the server"""
-    try:
-        untrusted_data = (await recv_b(proc, size)).decode()
-    except EOFError:
-        raise
-    except (AttributeError, UnicodeError):
-        logging.error("failed to decode received data!")
-        raise
+# async def recv(proc, size):
+    # """Convenience wrapper for receiving text data from the server"""
+    # try:
+        # untrusted_data = (await recv_b(proc, size)).decode()
+    # except ReceiveError
+        # raise
+    # except (AttributeError, UnicodeError):
+        # logging.error("failed to decode received data!")
+        # raise
 
-    return untrusted_data
+    # return untrusted_data
 
 
 async def recvline(proc):
     """Convenience wrapper for receiving a line of text data from the server"""
     try:
         untrusted_data = (await recvline_b(proc)).decode("ascii").rstrip()
-    except EOFError:
-        raise
+    except EOFError as e:
+        logging.error("server may have died...")
+        raise ReceiveError from e
     except (AttributeError, UnicodeError):
         logging.error("failed to decode received data!")
         raise
@@ -193,7 +192,7 @@ async def send(proc, data):
 async def get_img_dim(proc):
     try:
         untrusted_w, untrusted_h = map(int, (await recvline(proc)).split(" ", 1))
-    except (AttributeError, EOFError, UnicodeError) as e:
+    except (AttributeError, EOFError, UnicodeError, ValueError) as e:
         raise ReceiveError from e
 
     try:
@@ -261,12 +260,6 @@ def get_rep(tmpdir, page, initial, final):
                           final=name.with_suffix(f".{final}"))
 
 
-def save_rep(rep, data, size):
-    if rep.initial.write_bytes(data) != size:
-        logging.error("inconsistent initial representation file size")
-        raise RepresentationError
-
-
 async def recv_rep(loop, proc, tmpdir, page):
     """Receive initial representation from the server
 
@@ -278,11 +271,24 @@ async def recv_rep(loop, proc, tmpdir, page):
     try:
         dim = await get_img_dim(proc)
         data = await recv_b(proc, dim.size)
-        await loop.run_in_executor(None, save_rep, rep, data, dim.size)
-    except EOFError as e:
-        raise ReceiveError from e
     except (DimensionError, ReceiveError, RepresentationError):
         raise
+
+    # @size bytes must have been received if we're here, so a check on how much
+    # is written to @rep.initial isn't needed.
+    #
+    # Also, since the server sends the dimensions and contents of each page in a
+    # simple loop, if the server only sends @size - N bytes for a particular
+    # page, either:
+    #
+    #  1. We'll eventually get @size bytes later on as recv_b() will mistake the
+    #  other pages' dimensions and contents as part of the current page's
+    #  contents and we end up with a malformed irep, which we'll handle later
+    #  during representation's conversion.
+    #
+    #  2. The server exits (the loop is the last thing it does) and we get an
+    #  EOF, causing a ReceiveError.
+    await loop.run_in_executor(None, rep.initial.write_bytes, data)
 
     return rep, dim
 
