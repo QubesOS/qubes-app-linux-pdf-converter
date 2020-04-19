@@ -361,7 +361,7 @@ async def convert(loop, path, procs, reps):
 
 
 async def sanitize(loop, proc, path):
-    with TemporaryDirectory(prefix=f"qvm-sanitize-{proc.pid}-") as tmpdir:
+    with TemporaryDirectory(prefix=f"qvm-sanitize-") as tmpdir:
         try:
             convert_procs, reps = await receive(loop, proc, tmpdir)
         except (DimensionError, PageError, ReceiveError, RepresentationError):
