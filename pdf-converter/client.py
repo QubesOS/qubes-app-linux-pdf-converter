@@ -131,7 +131,6 @@ async def recv_b(proc, size):
     return untrusted_data
 
 
-# TODO (?): Size limit for readline()
 async def recvline_b(proc):
     """Qrexec wrapper for receiving a line of binary data from the server"""
     untrusted_data = await proc.stdout.readline()
@@ -141,19 +140,6 @@ async def recvline_b(proc):
         raise ReceiveError
 
     return untrusted_data
-
-
-# async def recv(proc, size):
-    # """Convenience wrapper for receiving text data from the server"""
-    # try:
-        # untrusted_data = (await recv_b(proc, size)).decode()
-    # except ReceiveError
-        # raise
-    # except (AttributeError, UnicodeError):
-        # logging.error("failed to decode received data!")
-        # raise
-
-    # return untrusted_data
 
 
 async def recvline(proc):
