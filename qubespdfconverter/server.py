@@ -28,6 +28,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 DEPTH = 8
+STDIN_READ_SIZE = 65536
 
 Representation = namedtuple("Representation", ["initial", "final"])
 
@@ -87,10 +88,10 @@ async def terminate_proc(proc):
 ###############################
 
 
-def recv_b(size):
+def recv_b():
     """Qrexec wrapper for receiving binary data from the client"""
     try:
-        untrusted_data = sys.stdin.buffer.read(size)
+        untrusted_data = sys.stdin.buffer.read()
     except EOFError as e:
         raise ReceiveError from e
 
@@ -210,9 +211,8 @@ async def render(loop, page, pdfpath, rep):
 
 def recv_pdf():
     try:
-        filesize = int(recvline())
-        data = recv_b(filesize)
-    except (ReceiveError, ValueError):
+        data = recv_b()
+    except ReceiveError:
         raise
 
     return data
@@ -270,7 +270,7 @@ def main():
 
     try:
         data = recv_pdf()
-    except (ReceiveError, ValueError):
+    except ReceiveError:
         sys.exit(1)
 
     with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:

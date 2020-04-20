@@ -52,8 +52,7 @@ class PageError(ValueError):
 
 
 class ReceiveError(Exception):
-    """
-    """
+    """Raise if an error occurs when reading from STDOUT"""
 
 
 class RepresentationError(ValueError):
@@ -202,11 +201,9 @@ async def get_img_dim(proc):
 
 async def send_pdf(loop, proc, path):
     try:
-        filesize = (await loop.run_in_executor(None, path.stat)).st_size
-        await send(proc, f"{filesize}\n")
-
         data = await loop.run_in_executor(None, path.read_bytes)
         await send(proc, data)
+        proc.stdin.write_eof()
     except BrokenPipeError:
         raise
 
@@ -248,6 +245,21 @@ def get_rep(tmpdir, page, initial, final):
 async def recv_rep(loop, proc, tmpdir, page):
     """Receive initial representation from the server
 
+    @size bytes is guaranteed to have ben received by the time we write @data to
+    @rep.initial, so a check on how much is written to isn't needed.
+
+    Also, since the server sends the dimensions and contents of each page in a
+    simple loop, if the server only sends @size - N bytes for a particular
+    page, either:
+
+     1. We'll eventually get @size bytes later on as recv_b() will mistake the
+     other pages' dimensions and contents as part of the current page's
+     contents and we end up with a malformed irep, which we'll handle later
+     during representation's conversion.
+
+     2. The server exits (the loop is the last thing it does) and we get an
+     EOF, causing a ReceiveError.
+
     :param proc: Qrexec process to read STDIN from
     :param path: File path which will store the initial representation
     """
@@ -259,20 +271,6 @@ async def recv_rep(loop, proc, tmpdir, page):
     except (DimensionError, ReceiveError, RepresentationError):
         raise
 
-    # @size bytes must have been received if we're here, so a check on how much
-    # is written to @rep.initial isn't needed.
-    #
-    # Also, since the server sends the dimensions and contents of each page in a
-    # simple loop, if the server only sends @size - N bytes for a particular
-    # page, either:
-    #
-    #  1. We'll eventually get @size bytes later on as recv_b() will mistake the
-    #  other pages' dimensions and contents as part of the current page's
-    #  contents and we end up with a malformed irep, which we'll handle later
-    #  during representation's conversion.
-    #
-    #  2. The server exits (the loop is the last thing it does) and we get an
-    #  EOF, causing a ReceiveError.
     await loop.run_in_executor(None, rep.initial.write_bytes, data)
 
     return rep, dim
@@ -280,7 +278,7 @@ async def recv_rep(loop, proc, tmpdir, page):
 
 async def start_convert(rep, dim):
     cmd = ["convert", "-size", f"{dim.width}x{dim.height}", "-depth",
-            f"{dim.depth}", f"rgb:{rep.initial}", f"png:{rep.final}"]
+           f"{dim.depth}", f"rgb:{rep.initial}", f"png:{rep.final}"]
 
     try:
         proc = await asyncio.create_subprocess_exec(*cmd)
@@ -363,9 +361,9 @@ async def sanitize(loop, proc, path):
     print(f"\nConverted PDF saved as: {pdf}")
 
 
-# TODO: KeyboardInterrupt
 async def run(loop, paths):
-    cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
+    # cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
+    cmd = ["/usr/bin/qrexec-client-vm", "disp4978", "qubes.PdfConvert"]
     procs = []
     send_tasks = []
     sanitize_tasks = []
@@ -387,7 +385,8 @@ async def run(loop, paths):
                                  sanitize_task,
                                  wait_proc(proc))
         except (BrokenPipeError, DimensionError, PageError, ReceiveError,
-                RepresentationError, subprocess.CalledProcessError):
+                RepresentationError, subprocess.CalledProcessError) as e:
+            print(type(e).__name__)
             await asyncio.gather(cancel_task(send_task),
                                  cancel_task(sanitize_task))
             await terminate_proc(proc)
