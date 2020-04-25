@@ -20,26 +20,35 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import asyncio
+import click
+from contextlib import contextmanager
 import functools
 import logging
 import os
 import subprocess
 import sys
+from click._compat import get_text_stderr
 from collections import namedtuple
 from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
 
-PROG_NAME = Path(sys.argv[0]).name
-ARCHIVE_PATH = Path(Path.home(), "QubesUntrustedPDFs")
+PROG = Path(sys.argv[0]).name
 
 MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
 DEPTH = 8
 
+ARCHIVE_PATH = Path(Path.home(), "QubesUntrustedPDFs")
+
 Dimensions = namedtuple("Dimensions", ["width", "height", "size", "depth"])
 Representation = namedtuple("Representations", ["initial", "final"])
+
+
+###############################
+#         Exceptions
+###############################
 
 
 class DimensionError(ValueError):
@@ -56,27 +65,66 @@ class ReceiveError(Exception):
     """Raise if an error occurs when reading from STDOUT"""
 
 
+class BadPath(click.BadParameter):
+    """Raised if a Path object parsed by Click is invalid."""
+    def __init__(self, path, message):
+        super().__init__(message, param_hint=f'"{path}"')
+
+
+def modify_click_errors(func):
+    """Decorator for replacing Click behavior on errors"""
+    def show(self, file=None):
+        """Removes usage message in UsageError messages"""
+        color = None
+
+        if file is None:
+            file = get_text_stderr()
+
+        if self.ctx is not None:
+            color = self.ctx.color
+
+        click.echo(f"{self.format_message()}", file=file, color=color)
+
+    def format_message(self):
+        """Removes 'Invalid value' prefix in BadParameter messages"""
+        if self.param_hint is not None:
+            prefix = self.param_hint
+        elif self.param is not None:
+            prefix = self.param.get_error_hint(self.ctx)
+        else:
+            return self.message
+        prefix = click.exceptions._join_param_hints(prefix)
+
+        return f"{prefix}: {self.message}"
+
+    click.exceptions.BadParameter.format_message = format_message
+    click.exceptions.UsageError.show = show
+
+    return func
+
+
+def validate_paths(ctx, param, untrusted_paths):
+    """Callback for validating file paths parsed by Click"""
+    for untrusted_p in untrusted_paths:
+        if not untrusted_p.resolve().exists():
+            raise BadPath(untrusted_p, "No such file or directory")
+        elif not untrusted_p.resolve().is_file():
+            raise BadPath(untrusted_p, "Not a regular file")
+
+        try:
+            with untrusted_p.resolve().open("rb") as f:
+                pass
+        except PermissionError:
+            raise BadPath(untrusted_p, "Not readable")
+    else:
+        paths = untrusted_paths
+
+    return paths
+
+
 ###############################
 #         Utilities
 ###############################
-
-
-def check_paths(paths):
-    abs_paths = []
-
-    for path in [Path(path) for path in paths]:
-        abspath = Path.resolve(path)
-
-        if not abspath.exists():
-            logging.error(f"No such file: \"{path}\"")
-            sys.exit(1)
-        elif not abspath.is_file():
-            logging.error(f"Not a regular file: \"{path}\"")
-            sys.exit(1)
-
-        abs_paths.append(abspath)
-
-    return abs_paths
 
 
 def check_range(val, upper):
@@ -361,9 +409,9 @@ async def convert(loop, path, pagenums, rep_q, convert_q):
     return save_path
 
 
-async def sanitize(loop, proc, path):
-    rep_q = asyncio.Queue(50)
-    convert_q = asyncio.Queue(50)
+async def sanitize(loop, proc, path, batch_size):
+    rep_q = asyncio.Queue(batch_size)
+    convert_q = asyncio.Queue(batch_size)
 
     try:
         pagenums = await recv_pagenums(loop, proc)
@@ -388,24 +436,24 @@ async def sanitize(loop, proc, path):
     print(f"\nConverted PDF saved as: {save_path}")
 
 
-async def run(loop, paths):
+async def run(loop, params):
     cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
     procs = []
     send_tasks = []
     sanitize_tasks = []
 
-    print("Sending files to Disposable VMs...")
+    click.echo("Sending files to Disposable VMs...")
 
-    for path in paths:
-        proc = await asyncio.create_subprocess_exec(*cmd,
-                                                    stdin=subprocess.PIPE,
+    for path in params["files"]:
+        proc = await asyncio.create_subprocess_exec(*cmd, stdin=subprocess.PIPE,
                                                     stdout=subprocess.PIPE)
         procs.append(proc)
         send_tasks.append(asyncio.create_task(send_pdf(loop, proc, path)))
-        sanitize_tasks.append(asyncio.create_task(sanitize(loop, proc, path)))
+        sanitize_tasks.append(asyncio.create_task(sanitize(loop, proc, path,
+                                                           params["batch"])))
 
-    for proc, path, send_task, sanitize_task in zip(procs, paths, send_tasks,
-                                                    sanitize_tasks):
+    for proc, path, send_task, sanitize_task in zip(procs, params["files"],
+                                                    send_tasks, sanitize_tasks):
         try:
             await asyncio.gather(send_task, sanitize_task, wait_proc(proc))
         except (BrokenPipeError, DimensionError, PageError, ReceiveError,
@@ -417,19 +465,22 @@ async def run(loop, paths):
             await loop.run_in_executor(None, archive, path)
 
 
-def main():
+@click.command()
+@click.option("-b", "--batch", type=click.IntRange(0), default=50)
+@click.argument("files", type=Path, nargs=-1, callback=validate_paths)
+@modify_click_errors
+def main(**params):
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    if len(sys.argv) == 1:
-        print(f"usage: {PROG_NAME} [FILE ...]", file=sys.stderr)
-        sys.exit(1)
+    if not params["files"]:
+        logging.info("No files to sanitize.")
+        sys.exit(0)
 
-    paths = check_paths(sys.argv[1:])
     Path.mkdir(ARCHIVE_PATH, exist_ok=True)
 
     try:
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(run(loop, paths))
+        loop.run_until_complete(run(loop, params))
     except KeyboardInterrupt:
         logging.error("Original files untouched.")
     finally:

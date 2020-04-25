@@ -28,6 +28,10 @@ setup(
     name='qubespdfconverter',
     version=open('version').read().strip(),
     packages=['qubespdfconverter'],
+    install_requires=[
+        'Click',
+        'Pillow'
+    ],
     entry_points={
         'qubes.tests.extra.for_template':
             'qubespdfconverter = qubespdfconverter.tests:list_tests',
