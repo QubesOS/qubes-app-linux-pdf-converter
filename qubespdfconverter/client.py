@@ -141,21 +141,31 @@ def unlink(path):
 
 
 async def cancel_task(task):
-    if not task.done():
-        task.cancel()
+    """
+
+    We might be cancelling finished tasks or tasks that exited with an error.
+    In those cases, we don't care about the Exceptions so we can ignore them.
+    """
+    task.cancel()
+    try:
         await task
-
-
-async def wait_proc(proc):
-    await proc.wait()
-    if proc.returncode:
-        raise subprocess.CalledProcessError
+    except:
+        pass
 
 
 async def terminate_proc(proc):
     if proc.returncode is None:
         proc.terminate()
         await proc.wait()
+
+
+async def wait_proc(proc, cmd):
+    try:
+        await proc.wait()
+        if proc.returncode:
+            raise subprocess.CalledProcessError(proc.returncode, cmd)
+    except asyncio.CancelledError:
+        await terminate_proc(proc)
 
 
 ###############################
@@ -168,7 +178,6 @@ async def recv_b(proc, size):
     try:
         untrusted_data = await proc.stdout.readexactly(size)
     except asyncio.IncompleteReadError as e:
-        # got EOF before @size bytes received
         raise ReceiveError from e
 
     return untrusted_data
@@ -310,11 +319,13 @@ async def convert_rep(loop, rep, dim):
 
     try:
         proc = await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc)
+        await wait_proc(proc, cmd)
     except asyncio.CancelledError:
         await terminate_proc(proc)
+        raise
     except subprocess.CalledProcessError:
-        logging.error(f"Conversion failed for page {rep.final.with_suffix('')}")
+        logging.error("Conversion failed for page %s"
+                      % rep.final.with_suffix("").name)
         raise
 
     await loop.run_in_executor(None, unlink, rep.initial)
@@ -369,42 +380,49 @@ async def convert_batch(loop, convert_q, save_path):
     convert_tasks = []
     freps = []
 
+    while not convert_q.empty():
+        convert_task, frep = await convert_q.get()
+        convert_tasks.append(convert_task)
+        freps.append(frep)
+        convert_q.task_done()
+
     try:
-        while not convert_q.empty():
-            convert_task, frep = await convert_q.get()
-            convert_tasks.append(convert_task)
-            freps.append(frep)
-            convert_q.task_done()
+        await asyncio.gather(*convert_tasks)
+    except subprocess.CalledProcessError:
+        for task in convert_tasks:
+            await cancel_task(task)
+        raise
 
-        try:
-            await asyncio.gather(*convert_tasks)
-            await combine_reps(loop, save_path, freps)
-        except IOError:
-            raise
-        except subprocess.CalledProcessError:
-            await asyncio.gather(*[cancel_task(task) for task in convert_tasks])
-            raise
+    try:
+        await combine_reps(loop, save_path, freps)
+    except IOError:
+        raise
 
-        await asyncio.gather(*[loop.run_in_executor(None, unlink, frep)
-                               for frep in freps])
-    except asyncio.CancelledError:
-        await asyncio.gather(*[cancel_task(task) for task in convert_tasks])
+    await asyncio.gather(*[loop.run_in_executor(None, unlink, frep)
+                        for frep in freps])
 
 
 async def convert(loop, path, pagenums, rep_q, convert_q):
     save_path = path.with_suffix(".trusted.pdf")
 
-    for page in range(1, pagenums + 1):
-        rep, dim = await rep_q.get()
-        convert_task = asyncio.create_task(convert_rep(loop, rep, dim))
-        await convert_q.put((convert_task, rep.final))
-        rep_q.task_done()
+    try:
+        for page in range(1, pagenums + 1):
+            rep, dim = await rep_q.get()
+            convert_task = asyncio.create_task(convert_rep(loop, rep, dim))
+            await convert_q.put((convert_task, rep.final))
+            rep_q.task_done()
 
-        if convert_q.full() or page == pagenums:
-            try:
-                await convert_batch(loop, convert_q, save_path)
-            except (IOError, subprocess.CalledProcessError):
-                raise
+            if convert_q.full() or page == pagenums:
+                try:
+                    await convert_batch(loop, convert_q, save_path)
+                except (IOError, subprocess.CalledProcessError):
+                    raise
+    except asyncio.CancelledError:
+        while not convert_q.empty():
+            task, _ = await convert_q.get()
+            await cancel_task(task)
+            convert_q.task_done()
+        raise
 
     return save_path
 
@@ -427,10 +445,10 @@ async def sanitize(loop, proc, path, batch_size):
         try:
             _, save_path = await asyncio.gather(receive_task, convert_task)
         except (DimensionError, ReceiveError):
-            cancel_task(convert_task)
+            await cancel_task(convert_task)
             raise
         except (IOError, subprocess.CalledProcessError):
-            cancel_task(receive_task)
+            await cancel_task(receive_task)
             raise
 
     print(f"\nConverted PDF saved as: {save_path}")
@@ -438,29 +456,37 @@ async def sanitize(loop, proc, path, batch_size):
 
 async def run(loop, params):
     cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
-    procs = []
+    proc_tasks = []
     send_tasks = []
     sanitize_tasks = []
 
     click.echo("Sending files to Disposable VMs...")
 
     for path in params["files"]:
-        proc = await asyncio.create_subprocess_exec(*cmd, stdin=subprocess.PIPE,
+        proc = await asyncio.create_subprocess_exec(*cmd,
+                                                    stdin=subprocess.PIPE,
                                                     stdout=subprocess.PIPE)
-        procs.append(proc)
+        proc_tasks.append(asyncio.create_task(wait_proc(proc, cmd)))
         send_tasks.append(asyncio.create_task(send_pdf(loop, proc, path)))
-        sanitize_tasks.append(asyncio.create_task(sanitize(loop, proc, path,
+        sanitize_tasks.append(asyncio.create_task(sanitize(loop,
+                                                           proc,
+                                                           path,
                                                            params["batch"])))
 
-    for proc, path, send_task, sanitize_task in zip(procs, params["files"],
-                                                    send_tasks, sanitize_tasks):
+    for path, proc_task, send_task, sanitize_task in zip(params["files"],
+                                                         proc_tasks,
+                                                         send_tasks,
+                                                         sanitize_tasks):
         try:
-            await asyncio.gather(send_task, sanitize_task, wait_proc(proc))
-        except (BrokenPipeError, DimensionError, PageError, ReceiveError,
+            await asyncio.gather(proc_task, send_task, sanitize_task)
+        except (BrokenPipeError,
+                DimensionError,
+                PageError,
+                ReceiveError,
                 subprocess.CalledProcessError) as e:
             await asyncio.gather(cancel_task(send_task),
-                                 cancel_task(sanitize_task))
-            await terminate_proc(proc)
+                                 cancel_task(sanitize_task),
+                                 cancel_task(proc_task))
         else:
             await loop.run_in_executor(None, archive, path)
 

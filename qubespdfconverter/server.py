@@ -66,15 +66,17 @@ def unlink(path):
 
 
 async def cancel_task(task):
-    if not task.done():
-        task.cancel()
+    task.cancel()
+    try:
         await task
+    except:
+        pass
 
 
-async def wait_proc(proc):
+async def wait_proc(proc, cmd):
     await proc.wait()
     if proc.returncode:
-        raise subprocess.CalledProcessError
+        raise subprocess.CalledProcessError(proc, returncode, cmd)
 
 
 async def terminate_proc(proc):
@@ -148,9 +150,9 @@ async def get_irep(pdfpath, irep, page):
 
     try:
         proc = await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc)
+        await wait_proc(proc, cmd)
     except asyncio.CancelledError:
-        terminate_proc(proc)
+        await terminate_proc(proc)
         raise
     except subprocess.CalledProcessError:
         raise
@@ -163,7 +165,7 @@ async def get_img_dim(irep):
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE)
         output, _ = await proc.communicate()
     except asyncio.CancelledError:
-        terminate_proc(proc)
+        await terminate_proc(proc)
         raise
     except subprocess.CalledProcessError:
         raise
@@ -175,10 +177,10 @@ async def convert_rep(irep, frep):
     cmd = ["convert", f"{irep}", "-depth", f"{DEPTH}", f"rgb:{frep}"]
 
     try:
-        proc =  await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc)
+        proc = await asyncio.create_subprocess_exec(*cmd)
+        await wait_proc(proc, cmd)
     except asyncio.CancelledError:
-        terminate_proc(proc)
+        await terminate_proc(proc)
         raise
     except subprocess.CalledProcessError:
         raise
