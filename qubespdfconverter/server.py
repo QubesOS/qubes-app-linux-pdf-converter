@@ -232,36 +232,55 @@ def get_pagenums(pdfpath):
 ###############################
 
 
-async def run(loop, tmpdir, pdfpath, pagenums, max_tasks=0):
-    results = []
-    tasks = []
-    limit = max_tasks if max_tasks > 0 else pagenums
-
-    for page in range(1, limit + 1):
+async def recv_pages(loop, queue, path, tmpdir, pagenums):
+    for page in range(1, pagenums + 1):
         rep = get_rep(tmpdir, page, "png", "rgb")
-        tasks.append(asyncio.create_task(render(loop, page, pdfpath, rep)))
+        task = asyncio.create_task(render(loop, page, path, rep))
 
-    for task in tasks:
         try:
-            results.append(await task)
-        except subprocess.CalledProcessError:
-            for task in tasks:
-                task.cancel()
-
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            await queue.put(task)
+        except asyncio.CancelledError:
+            await cancel_task(task)
+            queue.task_done()
             raise
 
-    for dim, frep in results:
+
+async def send_pages(loop, queue, pagenums):
+    for page in range(1, pagenums + 1):
+        task = await queue.get()
+
+        try:
+            dim, frep = await task
+        except subprocess.CalledProcessError:
+            raise
+        else:
+            queue.task_done()
+
         send(dim)
         send_b(await loop.run_in_executor(None, frep.read_bytes))
         await loop.run_in_executor(None, unlink, frep)
 
 
+async def run(loop, path, tmpdir, pagenums):
+    queue = asyncio.Queue(pagenums)
+    recv_task = asyncio.create_task(recv_pages(loop, queue, path, tmpdir, pagenums))
+    send_task = asyncio.create_task(send_pages(loop, queue, pagenums))
+
+    try:
+        await asyncio.gather(recv_task, send_task)
+    except subprocess.CalledProcessError:
+        await cancel_task(recv_task)
+
+        while not queue.empty():
+            task = await queue.get()
+            await cancel_task(task)
+            queue.task_done()
+
+        raise
+
+
 def main():
-    logging.basicConfig(format="DispVM: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="DispVM: %(message)s")
 
     try:
         pdf_data = recv_b()
@@ -280,7 +299,7 @@ def main():
 
         try:
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(run(loop, tmpdir, pdfpath, pagenums, 0))
+            loop.run_until_complete(run(loop, pdfpath, tmpdir, pagenums))
         except subprocess.CalledProcessError:
             sys.exit(1)
         finally:
