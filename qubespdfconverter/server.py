@@ -211,14 +211,6 @@ async def render(loop, page, pdfpath, rep):
 ###############################
 
 
-def recv_pdf():
-    try:
-        data = recv_b()
-    except ReceiveError:
-        raise
-
-    return data
-
 def get_pagenums(pdfpath):
     cmd = ["pdfinfo", f"{pdfpath}"]
 
@@ -271,13 +263,13 @@ def main():
     logging.basicConfig(format="DispVM: %(message)s")
 
     try:
-        data = recv_pdf()
+        pdf_data = recv_b()
     except ReceiveError:
         sys.exit(1)
 
     with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
         pdfpath = Path(tmpdir, "original")
-        pdfpath.write_bytes(data)
+        pdfpath.write_bytes(pdf_data)
 
         try:
             pagenums = get_pagenums(pdfpath)
