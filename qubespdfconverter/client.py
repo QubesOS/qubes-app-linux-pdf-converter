@@ -460,7 +460,7 @@ async def run(loop, params):
     send_tasks = []
     sanitize_tasks = []
 
-    click.echo("Sending files to Disposable VMs...")
+    print("Sending files to Disposable VMs...")
 
     for path in params["files"]:
         proc = await asyncio.create_subprocess_exec(*cmd,
