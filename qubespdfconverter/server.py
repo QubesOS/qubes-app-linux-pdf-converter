@@ -188,22 +188,23 @@ async def convert_rep(irep, frep):
 
 async def render(loop, page, pdfpath, rep):
     try:
-        irep_task = asyncio.create_task(get_irep(pdfpath, rep.initial, page))
-        await irep_task
+        try:
+            irep_task = asyncio.create_task(get_irep(pdfpath, rep.initial, page))
+            await irep_task
 
-        dim_task = asyncio.create_task(get_img_dim(rep.initial))
-        convert_task = asyncio.create_task(convert_rep(rep.initial, rep.final))
-        dim, _ = await asyncio.gather(dim_task, convert_task)
-    except subprocess.CalledProcessError:
-        raise
+            dim_task = asyncio.create_task(get_img_dim(rep.initial))
+            convert_task = asyncio.create_task(convert_rep(rep.initial, rep.final))
+            dim, _ = await asyncio.gather(dim_task, convert_task)
+        except subprocess.CalledProcessError:
+            raise
+        finally:
+            await loop.run_in_executor(None, unlink, rep.initial)
+
+        return (dim, rep.final)
     except asyncio.CancelledError:
-        cancel_task(irep_task)
-        cancel_task(dim_task)
-        cancel_task(convert_task)
-    finally:
-        await loop.run_in_executor(None, unlink, rep.initial)
-
-    return (dim, rep.final)
+        await asyncio.gather(cancel_task(irep_task), cancel_task(dim_task),
+                             cancel_task(convert_task))
+        raise
 
 
 ###############################
