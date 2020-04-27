@@ -34,6 +34,7 @@ from PIL import Image
 from tempfile import TemporaryDirectory
 
 PROG = Path(sys.argv[0]).name
+CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
 MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
@@ -43,26 +44,18 @@ DEPTH = 8
 ARCHIVE_PATH = Path(Path.home(), "QubesUntrustedPDFs")
 
 Dimensions = namedtuple("Dimensions", ["width", "height", "size", "depth"])
-Representation = namedtuple("Representations", ["initial", "final"])
-
-
-###############################
-#         Exceptions
-###############################
 
 
 class DimensionError(ValueError):
-    """
-    """
+    """Raised if invalid image dimensions were received"""
 
 
 class PageError(ValueError):
-    """
-    """
+    """Raised if an invalid number of pages was received"""
 
 
 class ReceiveError(Exception):
-    """Raise if an error occurs when reading from STDOUT"""
+    """Raised if a STDOUT read failed in a qrexec-client-vm subprocess"""
 
 
 class BadPath(click.BadParameter):
@@ -71,10 +64,410 @@ class BadPath(click.BadParameter):
         super().__init__(message, param_hint=f'"{path}"')
 
 
+def unlink(path):
+    """Wrapper for pathlib.Path.unlink(path, missing_ok=True)
+
+    :param Path: File path to delete
+    """
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+async def cancel_task(task):
+    """Convenience wrapper for cancelling an asyncio Task
+
+    Presumably, since we're cancelling tasks, we don't care what they returned
+    with or raised.
+
+    :param task: Task to cancel
+    """
+    task.cancel()
+    try:
+        await task
+    except:
+        pass
+
+
+async def terminate_proc(proc):
+    """Convenience wrapper for terminating a process
+
+    :param proc: Process to terminate
+    """
+    if proc.returncode is None:
+        proc.terminate()
+        await proc.wait()
+
+
+async def wait_proc(proc, cmd):
+    """Convenience wrapper for waiting on a process
+
+    :param proc: Process to wait on
+    :param cmd: Command executed by @proc (Exception handling purposes)
+    """
+    try:
+        await proc.wait()
+        if proc.returncode:
+            raise subprocess.CalledProcessError(proc.returncode, cmd)
+    except asyncio.CancelledError:
+        await terminate_proc(proc)
+
+
+async def send(proc, data):
+    """Qrexec wrapper for sending data to the server
+
+    :param proc: qrexec-client-vm process
+    :param data: Data to send (bytes, String, or int)
+    """
+    if isinstance(data, (int, str)):
+        data = str(data).encode()
+
+    proc.stdin.write(data)
+    try:
+        await proc.stdin.drain()
+    except BrokenPipeError:
+        raise
+
+
+async def recv_b(proc, size):
+    """Qrexec wrapper for receiving binary data from the server
+
+    :param proc: qrexec-client-vm process
+    :param size: Number of bytes to receive
+    """
+    try:
+        untrusted_data = await proc.stdout.readexactly(size)
+    except asyncio.IncompleteReadError as e:
+        raise ReceiveError from e
+
+    return untrusted_data
+
+
+async def recvline_b(proc):
+    """Qrexec wrapper for receiving a line of binary data from the server
+
+    :param proc: qrexec-client-vm process
+    """
+    untrusted_data = await proc.stdout.readline()
+
+    if not untrusted_data:
+        logging.error("Server may have died...")
+        raise ReceiveError
+
+    return untrusted_data
+
+
+async def recvline(proc):
+    """Convenience wrapper for receiving a line of text data from the server
+
+    :param proc: qrexec-client-vm process
+    """
+    try:
+        untrusted_data = (await recvline_b(proc)).decode("ascii").rstrip()
+    except EOFError as e:
+        logging.error("Server may have died...")
+        raise ReceiveError from e
+    except (AttributeError, UnicodeError):
+        logging.error("Failed to decode received data!")
+        raise
+
+    return untrusted_data
+
+
+class Representation(object):
+    """Umbrella object for the initial & final representations of a file
+
+    The initial representation must be of a format such that if it contains
+    malicious code/data, such code/data is excluded from the final
+    representation upon conversion. Generally, this makes the initial
+    representation a relatively simple format (e.g., RGB bitmap).
+
+    The final representation can be of any format you'd like, provided that
+    the initial representation's format was properly selected and you are
+    able to combine them later on into a PDF.
+
+    :param loop: Main event loop
+    :param prefix: Path prefixes of the representations
+    :param initial: Format of the initial representation
+    :param final: Format of the final representation
+    """
+
+    def __init__(self, loop, prefix, initial, final):
+        self.loop = loop
+        self.initial = prefix.with_suffix(f".{initial}")
+        self.final = prefix.with_suffix(f".{final}")
+        self.dim = None
+
+
+    async def convert(self):
+        """Convert initial representation into final representation"""
+        cmd = [
+            "convert",
+            "-size",
+            f"{self.dim.width}x{self.dim.height}",
+            "-depth",
+            f"{self.dim.depth}",
+            f"rgb:{self.initial}",
+            f"png:{self.final}"
+        ]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd)
+            await wait_proc(proc, cmd)
+        except asyncio.CancelledError:
+            await terminate_proc(proc)
+            raise
+        except subprocess.CalledProcessError:
+            logging.error(f"Page conversion failed")
+            raise
+
+        await self.loop.run_in_executor(None, unlink, self.initial)
+
+
+    async def receive(self, proc):
+        """Receive initial representation from the server
+
+        :param proc: qrexec-client-vm process
+        """
+        try:
+            self.dim = await self._dim(proc)
+            data = await recv_b(proc, self.dim.size)
+        except (DimensionError, ReceiveError):
+            raise
+
+        await self.loop.run_in_executor(None, self.initial.write_bytes, data)
+
+
+    async def _dim(self, proc):
+        """Receive and compute image dimensions for initial representation
+
+        :param proc: qrexec-client-vm process
+        """
+        try:
+            untrusted_w, untrusted_h = map(int, (await recvline(proc)).split(" ", 1))
+        except (AttributeError, EOFError, UnicodeError, ValueError) as e:
+            raise ReceiveError from e
+
+        if 1 <= untrusted_w <= MAX_IMG_WIDTH and \
+           1 <= untrusted_h <= MAX_IMG_HEIGHT:
+            width = untrusted_w
+            height = untrusted_h
+        else:
+            logging.error(f"invalid image measurements received")
+            raise DimensionError
+
+        size = width * height * 3
+        return Dimensions(width=width, height=height, size=size, depth=DEPTH)
+
+
+class UnsanitizedFile(object):
+    """A file not yet cleansed by holy bathwater
+
+    :param loop: Main event loop
+    :param path: Path to original, unsanitized file
+    """
+
+    def __init__(self, loop, path):
+        self.loop = loop
+        self.proc = None
+        self.rep_q = None
+        self.convert_q = None
+
+        self.orig_path = path
+        self.save_path = path.with_suffix(".trusted.pdf")
+        self.dir = None
+        self.pagenums = None
+
+
+    async def sanitize(self, size):
+        """Start Qubes RPC session and sanitization tasks
+
+        :param size: Batch size for queues
+        """
+        self.rep_q = asyncio.Queue(size)
+        self.convert_q = asyncio.Queue(size)
+        self.proc = await asyncio.create_subprocess_exec(*CLIENT_VM_CMD,
+                                                         stdin=subprocess.PIPE,
+                                                         stdout=subprocess.PIPE)
+        proc_task = asyncio.create_task(wait_proc(self.proc, CLIENT_VM_CMD))
+        send_task = asyncio.create_task(self._send())
+        sanitize_task = asyncio.create_task(self._sanitize())
+
+        try:
+            await asyncio.gather(proc_task, send_task, sanitize_task)
+        except (BrokenPipeError,
+                DimensionError,
+                PageError,
+                ReceiveError,
+                subprocess.CalledProcessError) as e:
+            await asyncio.gather(cancel_task(send_task),
+                                 cancel_task(sanitize_task),
+                                 cancel_task(proc_task))
+
+
+    async def _sanitize(self):
+        """Receive and convert representation files"""
+        try:
+            self.pagenums = await self._pagenums()
+        except (PageError, ReceiveError):
+            raise
+
+        with TemporaryDirectory(prefix="qvm-sanitize-") as d:
+            self.dir = d
+            receive_task = asyncio.create_task(self._receive())
+            convert_task = asyncio.create_task(self._convert())
+
+            try:
+                await asyncio.gather(receive_task, convert_task)
+            except (DimensionError, ReceiveError):
+                await cancel_task(convert_task)
+                raise
+            except (IOError, subprocess.CalledProcessError):
+                await cancel_task(receive_task)
+                raise
+
+        await self.loop.run_in_executor(None, self._archive)
+        print(f"Converted PDF saved as: {self.save_path}")
+
+
+    async def _receive(self):
+        """Receive initial representations"""
+        for page in range(1, self.pagenums + 1):
+            try:
+                rep = Representation(self.loop, Path(self.dir, str(page)),
+                                     "rgb", "png")
+                await rep.receive(self.proc)
+            except (DimensionError, ReceiveError):
+                raise
+
+            await self.rep_q.put(rep)
+
+
+    async def _convert(self):
+        """Convert initial representations to final representations"""
+        try:
+            for page in range(1, self.pagenums + 1):
+                rep = await self.rep_q.get()
+                convert_task = asyncio.create_task(rep.convert())
+                await self.convert_q.put((convert_task, rep.final))
+                self.rep_q.task_done()
+
+                if self.convert_q.full() or page == self.pagenums:
+                    try:
+                        await self._complete_batch()
+                    except (IOError, subprocess.CalledProcessError):
+                        raise
+        except asyncio.CancelledError:
+            while not self.convert_q.empty():
+                convert_task, _ = await self.convert_q.get()
+                await cancel_task(convert_task)
+                self.convert_q.task_done()
+            raise
+
+
+    async def _complete_batch(self):
+        """Wait on current batch of final representations to be combined"""
+        convert_tasks = []
+        freps = []
+
+        while not self.convert_q.empty():
+            convert_task, frep = await self.convert_q.get()
+            convert_tasks.append(convert_task)
+            freps.append(frep)
+            self.convert_q.task_done()
+
+        try:
+            await asyncio.gather(*convert_tasks)
+        except subprocess.CalledProcessError:
+            for convert_task in convert_tasks:
+                await cancel_task(convert_task)
+            raise
+
+        try:
+            await self._combine_reps(freps)
+        except IOError:
+            raise
+
+        await asyncio.gather(*[self.loop.run_in_executor(None, unlink, frep)
+                               for frep in freps])
+
+
+    async def _combine_reps(self, freps):
+        """Combine final representations into a sanitized PDF file
+
+        :param freps: List of final representations
+        """
+        try:
+            img_tasks = [self.loop.run_in_executor(None, Image.open, frep)
+                         for frep in freps]
+            images = await asyncio.gather(*img_tasks)
+        except IOError:
+            logging.error("Cannot identify image")
+            await asyncio.gather(*[self.loop.run_in_executor(None, img.close)
+                                   for img in images])
+            raise
+
+        try:
+            await self.loop.run_in_executor(None,
+                                            functools.partial(
+                                                images[0].save,
+                                                self.save_path,
+                                                "PDF",
+                                                resolution=100,
+                                                append=self.save_path.exists(),
+                                                append_images=images[1:],
+                                                save_all=True))
+        except IOError:
+            logging.error(f"Could not write to {self.save_path}")
+            await self.loop.run_in_executor(None, unlink, self.save_path)
+            raise
+        finally:
+            await asyncio.gather(*[self.loop.run_in_executor(None, img.close)
+                                   for img in images])
+
+
+    async def _send(self):
+        """Send original document to server"""
+        try:
+            data = await self.loop.run_in_executor(None,
+                                                   self.orig_path.read_bytes)
+            await send(self.proc, data)
+            self.proc.stdin.write_eof()
+        except BrokenPipeError:
+            raise
+
+
+    async def _pagenums(self):
+        """Receive number of pages in original document from server"""
+        try:
+            untrusted_pagenums = int(await recvline(self.proc))
+        except (AttributeError, EOFError, UnicodeError, ValueError) as e:
+            raise ReceiveError from e
+
+        try:
+            if not 1 <= untrusted_pagenums <= MAX_PAGES:
+                raise ValueError
+        except ValueError as e:
+            logging.error("Invalid number of pages received")
+            raise PageError from e
+        else:
+            pagenums = untrusted_pagenums
+
+        return pagenums
+
+
+    def _archive(self):
+        """Move original file into an archival directory"""
+        archive_path = Path(ARCHIVE_PATH, self.orig_path.name)
+        self.orig_path.rename(archive_path)
+        print(f"\nOriginal PDF saved as: {archive_path}")
+
+
 def modify_click_errors(func):
     """Decorator for replacing Click behavior on errors"""
     def show(self, file=None):
-        """Removes usage message in UsageError messages"""
+        """Removes usage message from UsageError error messages"""
         color = None
 
         if file is None:
@@ -86,7 +479,7 @@ def modify_click_errors(func):
         click.echo(f"{self.format_message()}", file=file, color=color)
 
     def format_message(self):
-        """Removes 'Invalid value' prefix in BadParameter messages"""
+        """Removes 'Invalid value' from BadParameter error messages"""
         if self.param_hint is not None:
             prefix = self.param_hint
         elif self.param is not None:
@@ -105,390 +498,28 @@ def modify_click_errors(func):
 
 def validate_paths(ctx, param, untrusted_paths):
     """Callback for validating file paths parsed by Click"""
-    for untrusted_p in untrusted_paths:
-        if not untrusted_p.resolve().exists():
-            raise BadPath(untrusted_p, "No such file or directory")
-        elif not untrusted_p.resolve().is_file():
-            raise BadPath(untrusted_p, "Not a regular file")
+    for untrusted_path in untrusted_paths:
+        if not untrusted_path.resolve().exists():
+            raise BadPath(untrusted_path, "No such file or directory")
+        elif not untrusted_path.resolve().is_file():
+            raise BadPath(untrusted_path, "Not a regular file")
 
         try:
-            with untrusted_p.resolve().open("rb") as f:
+            with untrusted_path.resolve().open("rb"):
                 pass
         except PermissionError:
-            raise BadPath(untrusted_p, "Not readable")
+            raise BadPath(untrusted_path, "Not readable")
     else:
         paths = untrusted_paths
 
     return paths
 
 
-###############################
-#         Utilities
-###############################
-
-
-def check_range(val, upper):
-    if not 1 <= val <= upper:
-        raise ValueError
-
-
-def unlink(path):
-    """Wrapper for Path.unlink(path, missing_ok=True)"""
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
-
-
-async def cancel_task(task):
-    """
-
-    We might be cancelling finished tasks or tasks that exited with an error.
-    In those cases, we don't care about the Exceptions so we can ignore them.
-    """
-    task.cancel()
-    try:
-        await task
-    except:
-        pass
-
-
-async def terminate_proc(proc):
-    if proc.returncode is None:
-        proc.terminate()
-        await proc.wait()
-
-
-async def wait_proc(proc, cmd):
-    try:
-        await proc.wait()
-        if proc.returncode:
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
-    except asyncio.CancelledError:
-        await terminate_proc(proc)
-
-
-###############################
-#       Qrexec-related
-###############################
-
-
-async def recv_b(proc, size):
-    """Qrexec wrapper for receiving binary data from the server"""
-    try:
-        untrusted_data = await proc.stdout.readexactly(size)
-    except asyncio.IncompleteReadError as e:
-        raise ReceiveError from e
-
-    return untrusted_data
-
-
-async def recvline_b(proc):
-    """Qrexec wrapper for receiving a line of binary data from the server"""
-    untrusted_data = await proc.stdout.readline()
-
-    if not untrusted_data:
-        logging.error("server may have died...")
-        raise ReceiveError
-
-    return untrusted_data
-
-
-async def recvline(proc):
-    """Convenience wrapper for receiving a line of text data from the server"""
-    try:
-        untrusted_data = (await recvline_b(proc)).decode("ascii").rstrip()
-    except EOFError as e:
-        logging.error("server may have died...")
-        raise ReceiveError from e
-    except (AttributeError, UnicodeError):
-        logging.error("failed to decode received data!")
-        raise
-
-    return untrusted_data
-
-
-async def send(proc, data):
-    """Qrexec wrapper for sending data to the server"""
-    if isinstance(data, (str, int)):
-        data = str(data).encode()
-
-    proc.stdin.write(data)
-    try:
-        await proc.stdin.drain()
-    except BrokenPipeError:
-        raise
-
-
-
-###############################
-#        Image-related
-###############################
-
-
-async def get_img_dim(proc):
-    try:
-        untrusted_w, untrusted_h = map(int, (await recvline(proc)).split(" ", 1))
-    except (AttributeError, EOFError, UnicodeError, ValueError) as e:
-        raise ReceiveError from e
-
-    try:
-        check_range(untrusted_w, MAX_IMG_WIDTH)
-        check_range(untrusted_h, MAX_IMG_HEIGHT)
-    except ValueError as e:
-        logging.error(f"invalid image measurements received {e}")
-        raise DimensionError from e
-    else:
-        width = untrusted_w
-        height = untrusted_h
-
-    size = width * height * 3
-
-    return Dimensions(width=width, height=height, size=size, depth=DEPTH)
-
-
-###############################
-#         PDF-related
-###############################
-
-
-async def send_pdf(loop, proc, path):
-    try:
-        data = await loop.run_in_executor(None, path.read_bytes)
-        await send(proc, data)
-        proc.stdin.write_eof()
-    except BrokenPipeError:
-        raise
-
-
-async def recv_pagenums(loop, proc):
-    try:
-        untrusted_pagenums = int(await recvline(proc))
-    except (AttributeError, EOFError, UnicodeError, ValueError) as e:
-        raise ReceiveError from e
-
-    try:
-        check_range(untrusted_pagenums, MAX_PAGES)
-    except ValueError as e:
-        logging.error("invalid number of pages received")
-        raise PageError from e
-    else:
-        pagenums = untrusted_pagenums
-
-    return pagenums
-
-
-def archive(path):
-    archive_path = Path(ARCHIVE_PATH, path.name)
-    path.rename(archive_path)
-    print(f"Original PDF saved as: {archive_path}")
-
-
-###############################
-#    Representation-related
-###############################
-
-
-def get_rep(tmpdir, page, initial, final):
-    name = Path(tmpdir, str(page))
-    return Representation(initial=name.with_suffix(f".{initial}"),
-                          final=name.with_suffix(f".{final}"))
-
-
-async def recv_rep(loop, proc, tmpdir, page):
-    """Receive initial representation from the server
-
-    :param loop: Event loop
-    """
-    try:
-        dim = await get_img_dim(proc)
-        data = await recv_b(proc, dim.size)
-    except (DimensionError, ReceiveError):
-        raise
-
-    rep = get_rep(tmpdir, page, "rgb", "png")
-    await loop.run_in_executor(None, rep.initial.write_bytes, data)
-
-    return rep, dim
-
-
-async def convert_rep(loop, rep, dim):
-    """Convert initial representation into final representation"""
-    cmd = ["convert", "-size", f"{dim.width}x{dim.height}", "-depth",
-           f"{dim.depth}", f"rgb:{rep.initial}", f"png:{rep.final}"]
-
-    try:
-        proc = await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc, cmd)
-    except asyncio.CancelledError:
-        await terminate_proc(proc)
-        raise
-    except subprocess.CalledProcessError:
-        logging.error("Conversion failed for page %s"
-                      % rep.final.with_suffix("").name)
-        raise
-
-    await loop.run_in_executor(None, unlink, rep.initial)
-
-
-async def combine_reps(loop, save_path, freps):
-    images = []
-
-    try:
-        tasks = [loop.run_in_executor(None, Image.open, frep) for frep in freps]
-        images = await asyncio.gather(*tasks)
-    except IOError:
-        logging.error("Cannot identify image")
-        await asyncio.gather(*[loop.run_in_executor(None, img.close)
-                               for img in images])
-        raise
-
-    try:
-        await loop.run_in_executor(None, functools.partial(
-                                            images[0].save,
-                                            save_path,
-                                            "PDF",
-                                            resolution=100,
-                                            append=save_path.exists(),
-                                            append_images=images[1:],
-                                            save_all=True))
-    except IOError:
-        logging.error(f"Could not write to {save_path}")
-        await loop.run_in_executor(None, unlink, save_path)
-        raise
-    finally:
-        await asyncio.gather(*[loop.run_in_executor(None, img.close)
-                               for img in images])
-
-
-###############################
-#           Main
-###############################
-
-
-async def receive(loop, proc, pagenums, tmpdir, rep_q):
-    for page in range(1, pagenums + 1):
-        try:
-            rep, dim = await recv_rep(loop, proc, tmpdir, page)
-        except (DimensionError, ReceiveError):
-            raise
-
-        await rep_q.put((rep, dim))
-
-
-async def convert_batch(loop, convert_q, save_path):
-    convert_tasks = []
-    freps = []
-
-    while not convert_q.empty():
-        convert_task, frep = await convert_q.get()
-        convert_tasks.append(convert_task)
-        freps.append(frep)
-        convert_q.task_done()
-
-    try:
-        await asyncio.gather(*convert_tasks)
-    except subprocess.CalledProcessError:
-        for task in convert_tasks:
-            await cancel_task(task)
-        raise
-
-    try:
-        await combine_reps(loop, save_path, freps)
-    except IOError:
-        raise
-
-    await asyncio.gather(*[loop.run_in_executor(None, unlink, frep)
-                        for frep in freps])
-
-
-async def convert(loop, path, pagenums, rep_q, convert_q):
-    save_path = path.with_suffix(".trusted.pdf")
-
-    try:
-        for page in range(1, pagenums + 1):
-            rep, dim = await rep_q.get()
-            convert_task = asyncio.create_task(convert_rep(loop, rep, dim))
-            await convert_q.put((convert_task, rep.final))
-            rep_q.task_done()
-
-            if convert_q.full() or page == pagenums:
-                try:
-                    await convert_batch(loop, convert_q, save_path)
-                except (IOError, subprocess.CalledProcessError):
-                    raise
-    except asyncio.CancelledError:
-        while not convert_q.empty():
-            task, _ = await convert_q.get()
-            await cancel_task(task)
-            convert_q.task_done()
-        raise
-
-    return save_path
-
-
-async def sanitize(loop, proc, path, batch_size):
-    rep_q = asyncio.Queue(batch_size)
-    convert_q = asyncio.Queue(batch_size)
-
-    try:
-        pagenums = await recv_pagenums(loop, proc)
-    except (PageError, ReceiveError):
-        raise
-
-    with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
-        receive_task = asyncio.create_task(receive(loop, proc, pagenums, tmpdir,
-                                                   rep_q))
-        convert_task = asyncio.create_task(convert(loop, path, pagenums, rep_q,
-                                                   convert_q))
-
-        try:
-            _, save_path = await asyncio.gather(receive_task, convert_task)
-        except (DimensionError, ReceiveError):
-            await cancel_task(convert_task)
-            raise
-        except (IOError, subprocess.CalledProcessError):
-            await cancel_task(receive_task)
-            raise
-
-    print(f"\nConverted PDF saved as: {save_path}")
-
-
 async def run(loop, params):
-    cmd = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
-    proc_tasks = []
-    send_tasks = []
-    sanitize_tasks = []
-
     print("Sending files to Disposable VMs...")
-
-    for path in params["files"]:
-        proc = await asyncio.create_subprocess_exec(*cmd,
-                                                    stdin=subprocess.PIPE,
-                                                    stdout=subprocess.PIPE)
-        proc_tasks.append(asyncio.create_task(wait_proc(proc, cmd)))
-        send_tasks.append(asyncio.create_task(send_pdf(loop, proc, path)))
-        sanitize_tasks.append(asyncio.create_task(sanitize(loop,
-                                                           proc,
-                                                           path,
-                                                           params["batch"])))
-
-    for path, proc_task, send_task, sanitize_task in zip(params["files"],
-                                                         proc_tasks,
-                                                         send_tasks,
-                                                         sanitize_tasks):
-        try:
-            await asyncio.gather(proc_task, send_task, sanitize_task)
-        except (BrokenPipeError,
-                DimensionError,
-                PageError,
-                ReceiveError,
-                subprocess.CalledProcessError) as e:
-            await asyncio.gather(cancel_task(send_task),
-                                 cancel_task(sanitize_task),
-                                 cancel_task(proc_task))
-        else:
-            await loop.run_in_executor(None, archive, path)
+    files = [UnsanitizedFile(loop, f) for f in params["files"]]
+    await asyncio.gather(*[f.sanitize(params["batch"]) for f in files],
+                         return_exceptions=True)
 
 
 @click.command()
