@@ -342,7 +342,7 @@ def main():
         try:
             f = SuspectFile(loop, Path(tmpdir, "original"))
             loop.run_until_complete(f.sanitize())
-        except (PageError, ReceiveError, subprocess.CalledProcessError):
+        except (ReceiveError, subprocess.CalledProcessError):
             sys.exit(1)
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
