@@ -23,7 +23,6 @@ import asyncio
 import logging
 import subprocess
 import sys
-from collections import namedtuple
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
