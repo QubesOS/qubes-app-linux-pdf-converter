@@ -260,8 +260,8 @@ class Representation(object):
         return Dimensions(width=width, height=height, size=size, depth=DEPTH)
 
 
-class UnsanitizedFile(object):
-    """A file not yet cleansed by holy bathwater
+class BaseFile(object):
+    """Unsanitized file
 
     :param loop: Main event loop
     :param path: Path to original, unsanitized file
@@ -289,6 +289,7 @@ class UnsanitizedFile(object):
         self.proc = await asyncio.create_subprocess_exec(*CLIENT_VM_CMD,
                                                          stdin=subprocess.PIPE,
                                                          stdout=subprocess.PIPE)
+
         proc_task = asyncio.create_task(wait_proc(self.proc, CLIENT_VM_CMD))
         send_task = asyncio.create_task(self._send())
         sanitize_task = asyncio.create_task(self._sanitize())
@@ -516,7 +517,7 @@ def validate_paths(ctx, param, untrusted_paths):
 
 async def run(loop, params):
     print("Sending files to Disposable VMs...")
-    files = [UnsanitizedFile(loop, f) for f in params["files"]]
+    files = [BaseFile(loop, f) for f in params["files"]]
     await asyncio.gather(*[f.sanitize(params["batch"]) for f in files],
                          return_exceptions=True)
 

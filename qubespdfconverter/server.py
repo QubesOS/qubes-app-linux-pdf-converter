@@ -237,8 +237,8 @@ class Representation(object):
         return output.decode("ascii")
 
 
-class SuspectFile(object):
-    """A potentially malicious file which needs sanitization
+class BaseFile(object):
+    """Unsanitized file
 
     :param loop: Main event loop
     :param path: Path to file
@@ -339,7 +339,7 @@ def main():
 
     with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
         try:
-            f = SuspectFile(loop, Path(tmpdir, "original"))
+            f = BaseFile(loop, Path(tmpdir, "original"))
             loop.run_until_complete(f.sanitize())
         except (ReceiveError, subprocess.CalledProcessError):
             sys.exit(1)
