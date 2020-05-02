@@ -24,6 +24,7 @@ import click
 import functools
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from click._compat import get_text_stderr
@@ -274,7 +275,7 @@ class BaseFile(object):
         self.convert_q = None
 
         self.orig_path = path
-        self.save_path = path.with_suffix(".trusted.pdf")
+        self.save_path = None
         self.dir = None
         self.pagenums = None
 
@@ -315,6 +316,8 @@ class BaseFile(object):
 
         with TemporaryDirectory(prefix="qvm-sanitize-") as d:
             self.dir = d
+            self.save_path = Path(d, self.orig_path.with_suffix(".trusted.pdf").name)
+
             receive_task = asyncio.create_task(self._receive())
             convert_task = asyncio.create_task(self._convert())
 
@@ -327,16 +330,23 @@ class BaseFile(object):
                 await cancel_task(receive_task)
                 raise
 
-        await self.loop.run_in_executor(None, self._archive)
-        print(f"Converted PDF saved as: {self.save_path}")
+            await self.loop.run_in_executor(
+                None,
+                shutil.move,
+                self.save_path, Path(self.orig_path.parent, self.save_path.name)
+            )
+
+            if click.get_current_context().params["in_place"]:
+                await self.loop.run_in_executor(None, unlink, self.orig_path)
+            else:
+                await self.loop.run_in_executor(None, self._archive)
 
 
     async def _receive(self):
         """Receive initial representations"""
         for page in range(1, self.pagenums + 1):
             try:
-                rep = Representation(self.loop, Path(self.dir, str(page)),
-                                     "rgb", "png")
+                rep = Representation(self.loop, Path(self.dir, str(page)), "rgb", "png")
                 await rep.receive(self.proc)
             except (DimensionError, ReceiveError):
                 raise
@@ -461,7 +471,6 @@ class BaseFile(object):
         """Move original file into an archival directory"""
         archive_path = Path(ARCHIVE_PATH, self.orig_path.name)
         self.orig_path.rename(archive_path)
-        print(f"\nOriginal PDF saved as: {archive_path}")
 
 
 def modify_click_errors(func):
@@ -566,7 +575,8 @@ def main(**params):
         logging.info("No files to sanitize.")
         sys.exit(0)
 
-    Path.mkdir(ARCHIVE_PATH, exist_ok=True)
+    if not params["in_place"]:
+        Path.mkdir(ARCHIVE_PATH, exist_ok=True)
 
     try:
         loop = asyncio.get_event_loop()
