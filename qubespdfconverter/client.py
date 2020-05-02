@@ -522,9 +522,42 @@ async def run(loop, params):
                          return_exceptions=True)
 
 
+# @click.option("-v", "--verbose", is_flag=True)
 @click.command()
-@click.option("-b", "--batch", type=click.IntRange(0), default=50)
-@click.argument("files", type=Path, nargs=-1, callback=validate_paths)
+@click.option(
+    "-b",
+    "--batch",
+    type=click.IntRange(0),
+    default=50,
+    metavar="SIZE",
+    help="Maximum number of conversion tasks"
+)
+@click.option(
+    "-a",
+    "--archive",
+    default="~/QubesUntrustedPDFs",
+    metavar="PATH",
+    help="Directory for storing archived files"
+)
+@click.option(
+    "-d",
+    "--dry-run",
+    is_flag=True,
+    help="Perform only server-side checks and conversions"
+)
+@click.option(
+    "-i",
+    "--in-place",
+    is_flag=True,
+    help="Replace original files instead of archiving them"
+)
+@click.argument(
+    "files",
+    type=Path,
+    nargs=-1,
+    callback=validate_paths,
+    metavar="[FILES ...]"
+)
 @modify_click_errors
 def main(**params):
     logging.basicConfig(level=logging.INFO, format="%(message)s")
