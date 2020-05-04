@@ -32,6 +32,7 @@ from collections import namedtuple
 from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
+from tqdm import tqdm
 
 PROG = Path(sys.argv[0]).name
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
@@ -112,6 +113,17 @@ async def wait_proc(proc, cmd):
             raise subprocess.CalledProcessError(proc.returncode, cmd)
     except asyncio.CancelledError:
         await terminate_proc(proc)
+
+
+async def add_success_cb(fut, cb, *args, is_async=False):
+    result = await fut
+
+    if is_async:
+        await cb(*args)
+    else:
+        cb(*args)
+
+    return result
 
 
 async def send(proc, data):
@@ -261,6 +273,22 @@ class Representation(object):
         return Dimensions(width=width, height=height, size=size, depth=DEPTH)
 
 
+class TqdmExtraFormat(tqdm):
+    """Provides a `pages` format parameter"""
+    @property
+    def format_dict(self):
+        d = super(TqdmExtraFormat, self).format_dict
+
+        if self.total == 0:
+            pages = "n/a"
+        else:
+            pages = str(d["n"]) + "/" + str(d["total"])
+
+        d.update(pages=pages)
+
+        return d
+
+
 class BaseFile(object):
     """Unsanitized file
 
@@ -277,10 +305,14 @@ class BaseFile(object):
         self.orig_path = path
         self.save_path = None
         self.dir = None
-        self.pagenums = None
+        self.pagenums = 0
+
+        self.bar = None
+        self.size = None
+        self.converted = False
 
 
-    async def sanitize(self, size):
+    async def sanitize(self, size, pos):
         """Start Qubes RPC session and sanitization tasks
 
         :param size: Batch size for queues
@@ -290,6 +322,11 @@ class BaseFile(object):
         self.proc = await asyncio.create_subprocess_exec(*CLIENT_VM_CMD,
                                                          stdin=subprocess.PIPE,
                                                          stdout=subprocess.PIPE)
+
+        self.bar = TqdmExtraFormat(total=self.pagenums,
+                        position=pos,
+                        desc=f"{self.orig_path}...",
+                        bar_format=" {desc} ({pages})")
 
         proc_task = asyncio.create_task(wait_proc(self.proc, CLIENT_VM_CMD))
         send_task = asyncio.create_task(self._send())
@@ -305,6 +342,11 @@ class BaseFile(object):
             await asyncio.gather(cancel_task(send_task),
                                  cancel_task(sanitize_task),
                                  cancel_task(proc_task))
+            raise
+        finally:
+            self.bar.set_description_str(str(self.orig_path))
+
+        self.converted = True
 
 
     async def _sanitize(self):
@@ -313,6 +355,8 @@ class BaseFile(object):
             self.pagenums = await self._pagenums()
         except (PageError, ReceiveError):
             raise
+
+        self.bar.reset(total=self.pagenums)
 
         with TemporaryDirectory(prefix="qvm-sanitize-") as d:
             self.dir = d
@@ -359,7 +403,10 @@ class BaseFile(object):
         try:
             for page in range(1, self.pagenums + 1):
                 rep = await self.rep_q.get()
-                convert_task = asyncio.create_task(rep.convert())
+                convert_fut = asyncio.ensure_future(rep.convert())
+                convert_task = asyncio.create_task(add_success_cb(convert_fut,
+                                                                  self.bar.update,
+                                                                  1))
                 await self.convert_q.put((convert_task, rep.final))
                 self.rep_q.task_done()
 
@@ -525,10 +572,30 @@ def validate_paths(ctx, param, untrusted_paths):
 
 
 async def run(loop, params):
-    print("Sending files to Disposable VMs...")
     files = [BaseFile(loop, f) for f in params["files"]]
-    await asyncio.gather(*[f.sanitize(params["batch"]) for f in files],
+    suffix = "s" if len(files) > 1 else ""
+    logging.info(f":: Sending file{suffix} to Disposable VM{suffix}...\n")
+
+    # FIXME: Hides exceptions with return_exceptions=True
+    await asyncio.gather(*[f.sanitize(params["batch"], i) for i, f in enumerate(files)],
                          return_exceptions=True)
+
+    # FIXME: Why does last close mess up the output w/out hardcoded positions?
+    n = 0
+    net_size = 0
+
+    for f in files:
+        if f.converted:
+            n += 1
+            net_size += Path(f.orig_path.parent, f.save_path.name).stat().st_size
+        f.bar.close()
+
+    frac = f"{n}/{len(files)}"
+    netsize = net_size / (1024 * 1024)
+    spacing = len(f"{netsize:.2f} MiB") + 2  # 2 = 2 leading spaces
+
+    print(f"\nTotal Sanitized Files:{frac:>{spacing}}")
+    print(f"Net Sanitized Size:     {netsize:.2f} MiB")
 
 
 # @click.option("-v", "--verbose", is_flag=True)
@@ -582,7 +649,7 @@ def main(**params):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(run(loop, params))
     except KeyboardInterrupt:
-        logging.error("Original files untouched.")
+        logging.error("Unsanitized files untouched.")
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
 
