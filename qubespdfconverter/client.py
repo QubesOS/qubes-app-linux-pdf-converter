@@ -616,12 +616,11 @@ async def run(params):
     output_statistics(results)
 
 
-# @click.option("-v", "--verbose", is_flag=True)
 @click.command()
 @click.option(
     "-b",
     "--batch",
-    type=click.IntRange(0),
+    type=click.IntRange(1),
     default=50,
     metavar="SIZE",
     help="Maximum number of conversion tasks"
@@ -629,15 +628,10 @@ async def run(params):
 @click.option(
     "-a",
     "--archive",
-    default="~/QubesUntrustedPDFs",
+    type=Path,
+    default=Path(Path.home(), "QubesUntrustedPDFs"),
     metavar="PATH",
     help="Directory for storing archived files"
-)
-@click.option(
-    "-d",
-    "--dry-run",
-    is_flag=True,
-    help="Perform only server-side checks and conversions"
 )
 @click.option(
     "-i",
