@@ -331,6 +331,7 @@ class BaseFile:
 
     :param path: Path to original, unsanitized file
     :param pagenums: Number of pages in original file
+    :param pdf: Path to temporary final PDf
     """
 
     def __init__(self, path, pagenums, pdf):
