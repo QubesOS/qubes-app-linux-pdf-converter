@@ -27,8 +27,10 @@ import os
 import shutil
 import subprocess
 import sys
+
 from click._compat import get_text_stderr
-from collections import namedtuple
+from enum import IntFlag
+from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
@@ -44,7 +46,21 @@ DEPTH = 8
 
 ARCHIVE_PATH = Path(Path.home(), "QubesUntrustedPDFs")
 
-Dimensions = namedtuple("Dimensions", ["width", "height", "size", "depth"])
+
+class Status(IntFlag):
+    """Sanitization job status"""
+    PENDING = 1
+    DONE = 2
+    FAIL = 4
+    CANCELLED = 8
+
+
+@dataclass(frozen=True)
+class ImageDimensions:
+    width: int
+    height: int
+    size: int
+    depth: int = DEPTH
 
 
 class DimensionError(ValueError):
