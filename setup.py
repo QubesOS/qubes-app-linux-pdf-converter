@@ -30,7 +30,8 @@ setup(
     packages=['qubespdfconverter'],
     install_requires=[
         'Click',
-        'Pillow'
+        'Pillow',
+        'tqdm'
     ],
     entry_points={
         'qubes.tests.extra.for_template':
