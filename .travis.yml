@@ -1,6 +1,8 @@
 sudo: required
 dist: bionic
 language: generic
+before_install:
+ - sudo apt-get -y install pylint
 install: git clone https://github.com/QubesOS/qubes-builder ~/qubes-builder
 script: ~/qubes-builder/scripts/travis-build
 env:
