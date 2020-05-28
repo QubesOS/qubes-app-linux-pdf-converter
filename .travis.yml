@@ -15,4 +15,4 @@ env:
 jobs:
   include:
     - script:
-      - shellcheck qpdf-convert-client qpdf-convert-server
+      - pylint --exit-zero --disable=C0411,C0111,C0103,C0102 client.py server.py

@@ -23,11 +23,9 @@ import asyncio
 import click
 import functools
 import logging
-import os
 import shutil
 import signal
 import subprocess
-import sys
 
 from click._compat import get_text_stderr
 from enum import IntFlag
@@ -128,7 +126,8 @@ def validate_paths(ctx, param, untrusted_paths):
     for untrusted_path in untrusted_paths:
         if not untrusted_path.resolve().exists():
             raise BadPath(untrusted_path, "No such file or directory")
-        elif not untrusted_path.resolve().is_file():
+
+        if not untrusted_path.resolve().is_file():
             raise BadPath(untrusted_path, "Not a regular file")
 
         try:
@@ -136,9 +135,8 @@ def validate_paths(ctx, param, untrusted_paths):
                 pass
         except PermissionError as e:
             raise BadPath(untrusted_path, "Not readable") from e
-    else:
-        paths = untrusted_paths
 
+    paths = untrusted_paths
     return paths
 
 
@@ -173,11 +171,7 @@ async def send(proc, data):
         data = str(data).encode()
 
     proc.stdin.write(data)
-
-    try:
-        await proc.stdin.drain()
-    except BrokenPipeError:
-        raise
+    await proc.stdin.drain()
 
 
 async def recv_b(proc, size):
@@ -208,9 +202,9 @@ class Tqdm(tqdm):
         d = super().format_dict
 
         if (
-            self.status & Status.PENDING
-            and d["total"] != 0
-            and d["n"] != d["total"]
+                self.status & Status.PENDING
+                and d["total"] != 0
+                and d["n"] != d["total"]
         ):
             self.pages = f"{d['n']}/{d['total']}"
 
@@ -346,7 +340,7 @@ class BaseFile:
         self.batch = None
 
 
-    async def sanitize(self, proc, bar, archive, depth, in_place):
+    async def sanitize(self, proc, bar, depth):
         """Receive and convert representation files
 
         :param archive: Path to archive directory
@@ -394,7 +388,7 @@ class BaseFile:
 
     async def _consume(self):
         """Convert initial representations to final form and save as PDF"""
-        for page in range(1, self.pagenums + 1):
+        for _ in range(1, self.pagenums + 1):
             batch_e = await self.batch.get()
             await batch_e.task
             await self._save_rep(batch_e.rep)
@@ -515,9 +509,7 @@ class Job:
         await self.base.sanitize(
             self.proc,
             self.bar,
-            archive,
-            depth,
-            in_place
+            depth
         )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
@@ -537,11 +529,11 @@ class Job:
             except FileNotFoundError:
                 pass
         else:
-                await asyncio.get_running_loop().run_in_executor(
-                    None,
-                    self._archive,
-                    archive
-                )
+            await asyncio.get_running_loop().run_in_executor(
+                None,
+                self._archive,
+                archive
+            )
 
 
     async def _send(self):
@@ -588,13 +580,13 @@ async def output_logs():
 
 
 def output_statistics(results):
-    completed = [res for res in results].count(None)
+    completed = results.count(None)
     print(f"\nTotal Sanitized Files:  {completed}/{len(results)}")
 
 
 async def run(params):
     suffix = "s" if len(params["files"]) > 1 else ""
-    print(f":: Sending file{suffix} to Disposable VM{suffix}...\n")
+    print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
 
     tasks = []
     jobs = [Job(f, i) for i, f in enumerate(params["files"])]

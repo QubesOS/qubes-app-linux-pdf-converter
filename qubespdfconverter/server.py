@@ -213,10 +213,13 @@ class BaseFile:
         """Return the number of pages in the suspect file"""
         cmd = ["pdfinfo", str(self.path)]
         output = subprocess.run(cmd, capture_output=True, check=True)
+        pages = 0
 
         for line in output.stdout.decode("ascii").splitlines():
             if "Pages:" in line:
-                return int(line.split(":")[1])
+                pages = int(line.split(":")[1])
+
+        return pages
 
 
     async def _publish(self):
@@ -240,7 +243,7 @@ class BaseFile:
 
     async def _consume(self):
         """Await conversion tasks and send final representation to client"""
-        for page in range(1, self.pagenums + 1):
+        for _ in range(1, self.pagenums + 1):
             # Get RGB data
             entry = await self.batch.get()
             await entry.task
@@ -283,7 +286,7 @@ def main():
         loop = asyncio.get_event_loop()
         try:
             loop.run_until_complete(base.sanitize())
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             sys.exit(1)
 
 
