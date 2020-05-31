@@ -14,7 +14,7 @@ override_dh_auto_install:
 
 override_dh_gencontrol:
 ifneq ($(shell grep -o 'stretch\|buster' /etc/debian_version),)
-	echo "pythonver:Depends=python" >> debian/qubes.pdf-converter.substvars
+	echo "pythonver:Depends=python" >> debian/qubes-pdf-converter.substvars
 else
 	echo "pythonver:Depends=python3" >> debian/qubes-pdf-converter.substvars
 endif
