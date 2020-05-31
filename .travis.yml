@@ -7,7 +7,7 @@ install:
  - git clone https://github.com/QubesOS/qubes-builder ~/qubes-builder
  - pip install --quiet -r ci/requirements.txt
 script:
- - python3 -m pylint --exit-code --rcfile=.pylintrc qubespdfconverter
+ - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
  - ~/qubes-builder/scripts/travis-build
 env:
  - DIST_DOM0=fc25 USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
