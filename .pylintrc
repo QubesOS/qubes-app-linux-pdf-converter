@@ -4,7 +4,7 @@ ignore=qubespdfconverter/tests
 
 [MESSAGES CONTROL]
 disable=
-  bad-continuation,
+  bare-except,
   blacklisted-name,
   deprecated-method,
   duplicate-code,
@@ -14,5 +14,7 @@ disable=
   locally-disabled,
   locally-enabled,
   missing-docstring,
+  protected-access,
   too-few-public-methods,
+  unused-argument,
   wrong-import-order
