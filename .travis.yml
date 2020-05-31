@@ -1,10 +1,14 @@
 sudo: required
 dist: bionic
-language: generic
-before_install:
- - sudo apt-get -y install pylint
-install: git clone https://github.com/QubesOS/qubes-builder ~/qubes-builder
-script: ~/qubes-builder/scripts/travis-build
+language: python
+python:
+ - '3.7'
+install:
+ - git clone https://github.com/QubesOS/qubes-builder ~/qubes-builder
+ - pip install --quiet -r ci/requirements.txt
+script:
+ - python3 -m pylint --exit-code --rcfile=.pylintrc qubespdfconverter
+ - ~/qubes-builder/scripts/travis-build
 env:
  - DIST_DOM0=fc25 USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
  - DISTS_VM=fc30 USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
@@ -13,8 +17,3 @@ env:
  - DISTS_VM=buster USE_QUBES_REPO_VERSION=4.0 USE_QUBES_REPO_TESTING=1
  - DIST_DOM0=fc31 USE_QUBES_REPO_VERSION=4.1 USE_QUBES_REPO_TESTING=1
  - DISTS_VM=bullseye USE_QUBES_REPO_VERSION=4.1 USE_QUBES_REPO_TESTING=1
-
-jobs:
-  include:
-    - script:
-      - pylint --exit-code --disable=C0411,C0111,C0103,C0102 qubespdfconverter/client.py qubespdfconverter/server.py

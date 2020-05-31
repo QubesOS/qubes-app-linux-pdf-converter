@@ -1,0 +1,18 @@
+[MASTER]
+persistent=no
+ignore=qubespdfconverter/tests
+
+[MESSAGES CONTROL]
+disable=
+  bad-continuation,
+  blacklisted-name,
+  deprecated-method,
+  duplicate-code,
+  file-ignored,
+  fixme,
+  invalid-name,
+  locally-disabled,
+  locally-enabled,
+  missing-docstring,
+  too-few-public-methods,
+  wrong-import-order
