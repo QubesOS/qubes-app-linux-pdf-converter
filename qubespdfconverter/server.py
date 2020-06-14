@@ -215,7 +215,7 @@ class BaseFile:
         output = subprocess.run(cmd, capture_output=True, check=True)
         pages = 0
 
-        for line in output.stdout.decode("ascii").splitlines():
+        for line in output.stdout.decode().splitlines():
             if "Pages:" in line:
                 pages = int(line.split(":")[1])
 
