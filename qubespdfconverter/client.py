@@ -270,6 +270,11 @@ class Representation:
         except subprocess.CalledProcessError as e:
             raise RepresentationError("Failed to convert representation") from e
 
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            self.initial.unlink
+        )
+
         bar.update(1)
 
 
@@ -369,12 +374,11 @@ class BaseFile:
 
     async def _publish(self, proc, bar):
         """Receive initial representations and start their conversions"""
+        pages = []
+
         for page in range(1, self.pagenums + 1):
             rep = Representation(Path(self.pdf.parent, str(page)), "rgb", "png")
             await rep.receive(proc)
-
-            if page % self.batch.maxsize == 0:
-                await self.batch.join()
 
             task = asyncio.create_task(rep.convert(bar))
             batch_e = BatchEntry(task, rep)
@@ -385,44 +389,64 @@ class BaseFile:
                 await cancel_task(task)
                 raise
 
+            pages.append(page)
+
+            if page % self.batch.maxsize == 0 or page == self.pagenums:
+                await self.batch.join()
+                await self._save_reps(pages)
+                pages = []
+
 
     async def _consume(self):
         """Convert initial representations to final form and save as PDF"""
         for _ in range(1, self.pagenums + 1):
             batch_e = await self.batch.get()
             await batch_e.task
-            await self._save_rep(batch_e.rep)
             self.batch.task_done()
 
 
-    async def _save_rep(self, rep):
+    async def _save_reps(self, pages):
         """Save final representations to a PDF file"""
-        try:
-            image = await asyncio.get_running_loop().run_in_executor(
-                None,
-                Image.open,
-                rep.final
-            )
-        except IOError as e:
-            raise RepresentationError("Failed to open representation") from e
+        images = []
+
+        for page in pages:
+            try:
+                images.append(await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    Image.open,
+                    Path(self.pdf.parent, f"{page}.png"))
+                )
+            except IOError as e:
+                for image in images:
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        image.close
+                    )
+                raise RepresentationError("Failed to open representation") from e
 
         try:
             await asyncio.get_running_loop().run_in_executor(
                 None,
-                functools.partial(image.save,
+                functools.partial(images[0].save,
                                   self.pdf,
                                   "PDF",
                                   resolution=100,
                                   append=self.pdf.exists(),
+                                  append_images=[] if len(images) == 1 else images[1:],
                                   save_all=True)
             )
         except IOError as e:
             raise RepresentationError("Failed to save representation") from e
         finally:
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                image.close
-            )
+            for image, page in zip(images, pages):
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    image.close
+                )
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    Path(self.pdf.parent, f"{page}.png").unlink
+                )
 
 
 class Job:
