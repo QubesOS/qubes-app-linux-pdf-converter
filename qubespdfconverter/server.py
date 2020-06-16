@@ -4,6 +4,7 @@
 # The Qubes OS Project, http://www.qubes-os.org
 #
 # Copyright (C) 2013 Joanna Rutkowska <joanna@invisiblethingslab.com>
+# Copyright (C) 2020 Jason Phan <td.satch@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
