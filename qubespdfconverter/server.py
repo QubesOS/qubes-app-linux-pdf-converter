@@ -232,11 +232,11 @@ class BaseFile:
                 "rgb"
             )
             task = asyncio.create_task(rep.convert())
-            entry = BatchEntry(task, rep)
+            batch_e = BatchEntry(task, rep)
             await self.batch.join()
 
             try:
-                await self.batch.put(entry)
+                await self.batch.put(batch_e)
             except asyncio.CancelledError:
                 await cancel_task(task)
                 raise
@@ -244,29 +244,25 @@ class BaseFile:
 
     async def _consume(self):
         """Await conversion tasks and send final representation to client"""
-        for _ in range(1, self.pagenums + 1):
-            # Get RGB data
-            entry = await self.batch.get()
-            await entry.task
+        for _ in range(self.pagenums):
+            batch_e = await self.batch.get()
+            await batch_e.task
 
-            # Read RGB data
             rgb_data = await asyncio.get_running_loop().run_in_executor(
                 None,
-                entry.rep.final.read_bytes
+                batch_e.rep.final.read_bytes
             )
 
-            # Clean up RGB data
             await asyncio.get_running_loop().run_in_executor(
                 None,
                 unlink,
-                entry.rep.final
+                batch_e.rep.final
             )
 
-            # Send dimensions and RGB data
             await asyncio.get_running_loop().run_in_executor(
                 None,
                 send,
-                entry.rep.dim
+                batch_e.rep.dim
             )
             send_b(rgb_data)
 
