@@ -233,6 +233,7 @@ class BaseFile:
             )
             task = asyncio.create_task(rep.convert())
             entry = BatchEntry(task, rep)
+            await self.batch.join()
 
             try:
                 await self.batch.put(entry)
