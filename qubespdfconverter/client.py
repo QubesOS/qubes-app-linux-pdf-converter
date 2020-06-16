@@ -26,6 +26,7 @@ import logging
 import shutil
 import signal
 import subprocess
+import sys
 
 from click._compat import get_text_stderr
 from enum import IntFlag
@@ -596,18 +597,6 @@ class Job:
         self.path.rename(Path(archive, self.path.name))
 
 
-async def output_logs():
-    while not ERROR_LOGS.empty():
-        err_msg = await ERROR_LOGS.get()
-        logging.error(err_msg)
-        ERROR_LOGS.task_done()
-
-
-def output_statistics(results):
-    completed = results.count(None)
-    print(f"\nTotal Sanitized Files:  {completed}/{len(results)}")
-
-
 async def run(params):
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
@@ -625,12 +614,19 @@ async def run(params):
     )
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
+    completed = results.count(None)
 
     for job in jobs:
         job.bar.close()
 
-    await output_logs()
-    output_statistics(results)
+    while not ERROR_LOGS.empty():
+        err_msg = await ERROR_LOGS.get()
+        logging.error(err_msg)
+        ERROR_LOGS.task_done()
+
+    print(f"\nTotal Sanitized Files:  {completed}/{len(results)}")
+
+    return completed != len(results)
 
 
 @click.command()
@@ -669,7 +665,7 @@ def main(**params):
 
     if params["files"]:
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(run(params))
+        sys.exit(loop.run_until_complete(run(params)))
     else:
         print("No files to sanitize.")
 
