@@ -2,3 +2,4 @@ rpm/
 deb/
 pkgs/
 *.gz
+debian/changelog.*
