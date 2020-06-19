@@ -620,6 +620,9 @@ async def run(params):
     for job in jobs:
         job.bar.close()
 
+    if not ERROR_LOGS.empty():
+        print()
+
     while not ERROR_LOGS.empty():
         err_msg = await ERROR_LOGS.get()
         logging.error(err_msg)
