@@ -5,6 +5,7 @@ ignore=qubespdfconverter/tests
 [MESSAGES CONTROL]
 disable=
   bare-except,
+  bad-continuation,
   blacklisted-name,
   deprecated-method,
   duplicate-code,
