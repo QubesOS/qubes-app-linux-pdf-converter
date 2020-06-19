@@ -434,7 +434,7 @@ class BaseFile:
                                   "PDF",
                                   resolution=100,
                                   append=self.pdf.exists(),
-                                  append_images=[] if len(images) == 1 else images[1:],
+                                  append_images=images[1:],
                                   save_all=True)
             )
         except IOError as e:
