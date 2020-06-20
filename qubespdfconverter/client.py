@@ -487,7 +487,8 @@ class Job:
             try:
                 await self._setup(tmpdir)
                 await self._start(archive, depth, in_place)
-            except (PageError,
+            except (OSError,
+                    PageError,
                     QrexecError,
                     DimensionError,
                     RepresentationError,
