@@ -28,14 +28,13 @@ import shutil
 import signal
 import subprocess
 import sys
+import tqdm
 
-from click._compat import get_text_stderr
-from enum import IntFlag
+from enum import Enum, auto
 from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
-from tqdm import tqdm
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
@@ -47,12 +46,11 @@ DEPTH = 8
 ERROR_LOGS = asyncio.Queue()
 
 
-class Status(IntFlag):
+class Status(Enum):
     """Sanitization job status"""
-    PENDING = 1
-    DONE = 2
-    FAIL = 4
-    CANCELLED = 8
+    DONE = auto()
+    FAIL = auto()
+    CANCELLED = auto()
 
 
 @dataclass(frozen=True)
@@ -97,7 +95,7 @@ def modify_click_errors(func):
         color = None
 
         if file is None:
-            file = get_text_stderr()
+            file = click._compat.get_text_stderr()
 
         if self.ctx is not None:
             color = self.ctx.color
@@ -190,37 +188,15 @@ async def recvline(proc):
     return untrusted_data.decode("ascii").rstrip()
 
 
-class Tqdm(tqdm):
-    """Adds @pages and @status attributes"""
-
-    def __init__(self, *args, **kwargs):
-        self.pages = "0/?"
-        self.status = Status.PENDING
-        super().__init__(*args, **kwargs)
+class Tqdm(tqdm.tqdm):
+    def set_status(self, status):
+        prefix = self.desc[:self.desc.rfind('.') + 1]
+        self.set_description_str(prefix + status)
+        self.refresh()
 
 
-    @property
-    def format_dict(self):
-        d = super().format_dict
-
-        if (
-                self.status & Status.PENDING
-                and d["total"] != 0
-                and d["n"] != d["total"]
-        ):
-            self.pages = f"{d['n']}/{d['total']}"
-
-        d.update(pages=self.pages)
-
-        return d
-
-
-    def set_status(self, flag, refresh=True):
-        self.status = flag
-        self.pages = self.status.name.lower()
-
-        if refresh:
-            self.refresh()
+    def set_job_status(self, status):
+        self.set_status(status.name.lower())
 
 
 class Representation:
@@ -278,6 +254,7 @@ class Representation:
         )
 
         bar.update(1)
+        bar.set_status(f"{bar.n}/{bar.total}")
 
 
     async def receive(self, proc):
@@ -328,7 +305,7 @@ class BatchEntry:
 
 
 class BaseFile:
-    """Unsanitized file
+    """An unsanitized file
 
     :param path: Path to original, unsanitized file
     :param pagenums: Number of pages in original file
@@ -452,7 +429,7 @@ class BaseFile:
 
 
 class Job:
-    """
+    """A sanitization job
 
     :param path: Path to original, unsanitized file
     :param pos: Bar position
@@ -467,10 +444,9 @@ class Job:
         :param pdf: Path to temporary PDF for appending representations
         """
         self.path = path
-        self.bar = Tqdm(total=0,
-                        position=pos,
-                        desc=str(path),
-                        bar_format=" {desc}...{pages}")
+        self.bar = Tqdm(desc=f"{path}...0/?",
+                        bar_format=" {desc}",
+                        position=pos)
         self.base = None
         self.proc = None
         self.pdf = None
@@ -501,19 +477,19 @@ class Job:
                 # operation (e.g., a STDOUT read), thereby raising an exception
                 # not expected by the cleanup code.
                 if self.proc.returncode == -signal.SIGINT:
-                    self.bar.set_status(Status.CANCELLED)
+                    self.bar.set_job_status(Status.CANCELLED)
                     raise asyncio.CancelledError
 
-                self.bar.set_status(Status.FAIL)
-                await ERROR_LOGS.put(f"{self.path.name}: {str(e)}")
+                self.bar.set_job_status(Status.FAIL)
+                await ERROR_LOGS.put(f"{self.path.name}: {e}")
                 if self.proc.returncode is not None:
                     await terminate_proc(self.proc)
                 raise
             except asyncio.CancelledError:
-                self.bar.set_status(Status.CANCELLED)
+                self.bar.set_job_status(Status.CANCELLED)
                 raise
 
-        self.bar.set_status(Status.DONE)
+        self.bar.set_job_status(Status.DONE)
 
 
     async def _setup(self, tmpdir):
@@ -526,7 +502,11 @@ class Job:
             await cancel_task(page_task)
             raise
         else:
-            self.bar.reset(total=pagenums)
+            try:
+                self.bar.reset(total=pagenums)
+            except AttributeError:
+                self.bar.total = pagenums
+                self.bar.refresh()
 
         self.pdf = Path(tmpdir, self.path.with_suffix(".trusted.pdf").name)
         self.base = BaseFile(self.path, pagenums, self.pdf)
@@ -621,15 +601,25 @@ async def run(params):
     for job in jobs:
         job.bar.close()
 
-    if not ERROR_LOGS.empty():
-        print()
+    if ERROR_LOGS.empty():
+        if tqdm.__version__ >= "4.34.0":
+            newlines = "\n"
+        else:
+            newlines = "\n" if len(jobs) == 1 else "\n" * (len(jobs) + 1)
+    else:
+        newlines = "\n"
 
-    while not ERROR_LOGS.empty():
-        err_msg = await ERROR_LOGS.get()
-        logging.error(err_msg)
-        ERROR_LOGS.task_done()
+        if tqdm.__version__ >= "4.34.0":
+            print()
+        else:
+            print() if len(jobs) == 1 else print("\n" * len(jobs))
 
-    print(f"\nTotal Sanitized Files:  {completed}/{len(results)}")
+        while not ERROR_LOGS.empty():
+            err_msg = await ERROR_LOGS.get()
+            logging.error(err_msg)
+            ERROR_LOGS.task_done()
+
+    print(f"{newlines}Total Sanitized Files:  {completed}/{len(results)}")
 
     return completed != len(results)
 
