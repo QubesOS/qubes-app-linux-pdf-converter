@@ -4,11 +4,12 @@ ignore=qubespdfconverter/tests
 
 [MESSAGES CONTROL]
 disable=
-  bare-except,
   bad-continuation,
+  bare-except,
   blacklisted-name,
   deprecated-method,
   duplicate-code,
+  expression-not-assigned,
   file-ignored,
   fixme,
   invalid-name,
