@@ -22,12 +22,19 @@
 # USA.
 #
 
+import sys
 from setuptools import setup
+
+if sys.version_info[0:2] < (3, 7):
+    # on older python install just tests (dom0 package)
+    packages = ['qubespdfconverter.tests']
+else:
+    packages = ['qubespdfconverter', 'qubespdfconverter.tests']
 
 setup(
     name='qubespdfconverter',
     version=open('version').read().strip(),
-    packages=['qubespdfconverter'],
+    packages=packages,
     install_requires=[
         'Click',
         'Pillow',
