@@ -10,5 +10,12 @@ Homepage: http://www.qubes-os.org
 Package: qubes-pdf-converter
 Section: admin
 Architecture: any
-Depends: poppler-utils, imagemagick, python3-nautilus | python-nautilus, ${misc:Depends}
+Depends:
+ poppler-utils,
+ imagemagick,
+ python3-nautilus | python-nautilus,
+ python3-click,
+ python3-pillow,
+ python3-tqdm,
+ ${misc:Depends}
 Description: The Qubes service for converting untrusted PDF files into trusted ones

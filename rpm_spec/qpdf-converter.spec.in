@@ -37,6 +37,9 @@ BuildRequires: pandoc
 
 Requires:	poppler-utils ImageMagick
 Requires:	nautilus-python
+Requires:	python%{python3_pkgversion}-pillow
+Requires:	python%{python3_pkgversion}-click
+Requires:	python%{python3_pkgversion}-tqdm
 
 Source0: %{name}-%{version}.tar.gz
 
