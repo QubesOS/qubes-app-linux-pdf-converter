@@ -34,6 +34,8 @@ License:	GPL
 URL:		http://www.qubes-os.org
 
 BuildRequires: pandoc 
+BuildRequires: python%{python3_pkgversion}-setuptools
+BuildRequires: python%{python3_pkgversion}-devel
 
 Requires:	poppler-utils ImageMagick
 Requires:	nautilus-python
@@ -65,6 +67,9 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
 /usr/share/kde4/services/qvm-convert-pdf.desktop
 %{_mandir}/man1/qvm-convert-pdf.1*
+%dir %{python3_sitelib}/qubespdfconverter-*.egg-info
+%{python3_sitelib}/qubespdfconverter-*.egg-info/*
+%{python3_sitelib}/qubespdfconverter
 
 %changelog
 @CHANGELOG@

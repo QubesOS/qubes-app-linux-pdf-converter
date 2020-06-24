@@ -3,6 +3,7 @@
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
+export PYTHON_PREFIX_ARG=--install-layout=deb
 
 export DESTDIR=$(shell readlink -m .)/debian/tmp
 
@@ -11,4 +12,7 @@ export DESTDIR=$(shell readlink -m .)/debian/tmp
 
 override_dh_auto_install:
 	make install-vm
+
+override_dh_missing:
+	dh_missing --fail-missing
 

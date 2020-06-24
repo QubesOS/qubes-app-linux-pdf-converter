@@ -23,6 +23,8 @@
 #
 
 import sys
+import os
+import setuptools.command.install
 from setuptools import setup
 
 if sys.version_info[0:2] < (3, 7):
@@ -30,6 +32,30 @@ if sys.version_info[0:2] < (3, 7):
     packages = ['qubespdfconverter.tests']
 else:
     packages = ['qubespdfconverter', 'qubespdfconverter.tests']
+
+# create simple scripts that run much faster than "console entry points"
+class CustomInstall(setuptools.command.install.install):
+    def run(self):
+        super().run()
+        if 'qubespdfconverter' not in packages:
+            return
+        scripts = [
+            ('usr/lib/qubes/qpdf-convert-server', 'qubespdfconverter.server'),
+            ('usr/bin/qvm-convert-pdf', 'qubespdfconverter.client'),
+        ]
+        for file, pkg in scripts:
+            path = os.path.join(self.root, file)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(
+"""#!/usr/bin/python3
+from {} import main
+import sys
+if __name__ == '__main__':
+	sys.exit(main())
+""".format(pkg))
+
+            os.chmod(path, 0o755)
 
 setup(
     name='qubespdfconverter',
@@ -43,5 +69,8 @@ setup(
     entry_points={
         'qubes.tests.extra.for_template':
             'qubespdfconverter = qubespdfconverter.tests:list_tests',
-    }
+    },
+    cmdclass={
+       'install': CustomInstall
+    },
 )

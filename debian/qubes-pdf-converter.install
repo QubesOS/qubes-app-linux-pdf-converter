@@ -6,3 +6,5 @@ usr/share/nautilus-python/extensions
 usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py
 usr/share/kde4/services/qvm-convert-pdf.desktop
 usr/share/man/man1/qvm-convert-pdf.1.gz
+usr/lib/python3/dist-packages/qubespdfconverter
+usr/lib/python3/dist-packages/qubespdfconverter-*.egg-info

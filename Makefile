@@ -24,8 +24,7 @@ build:
 
 install-vm:
 	make install -C doc
-	install -D qubespdfconverter/client.py $(DESTDIR)/usr/bin/qvm-convert-pdf
-	install -D qubespdfconverter/server.py $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
+	python3 setup.py install -O1 $(PYTHON_PREFIX_ARG) --root $(DESTDIR)
 	install -d $(DESTDIR)/etc/qubes-rpc
 	ln -s ../../usr/lib/qubes/qpdf-convert-server $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf.gnome $(DESTDIR)/usr/lib/qubes/qvm-convert-pdf.gnome
@@ -36,6 +35,9 @@ install-vm:
 
 install-dom0:
 	python3 setup.py install -O1 --root $(DESTDIR)
+	# not needed in dom0
+	rm -f $(DESTDIR)/usr/bin/qvm-convert-pdf
+	rm -f $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
 
 clean:
 	rm -rf debian/changelog.*
