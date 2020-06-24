@@ -39,6 +39,7 @@ BuildRequires: python%{python3_pkgversion}-devel
 
 Requires:	poppler-utils ImageMagick
 Requires:	nautilus-python
+Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
 Requires:	python%{python3_pkgversion}-tqdm
