@@ -4,3 +4,5 @@ click
 pillow
 pylint
 tqdm
+magic
+unotools
