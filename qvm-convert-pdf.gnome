@@ -24,4 +24,4 @@ if [ $# -ne 1 ]; then
 exit 1
 fi
 
-/usr/bin/qvm-convert-pdf -g "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
+/usr/bin/qvm-convert-pdf "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
