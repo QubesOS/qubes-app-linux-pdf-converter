@@ -4,5 +4,5 @@ click
 pillow
 pylint
 tqdm
-magic
+file-magic
 unotools
