@@ -224,7 +224,7 @@ class Representation:
         self.dim = None
 
 
-    async def convert(self, bar):
+    async def convert(self, bar, gui):
         """Convert initial representation into final representation
 
         :param bar: Progress bar to update upon completion
@@ -253,7 +253,10 @@ class Representation:
         )
 
         bar.update(1)
-        bar.set_status(f"{bar.n}/{bar.total}")
+        if gui:
+            print(f"\n{int(100*bar.n/bar.total)}")
+        else:
+            bar.set_status(f"{bar.n}/{bar.total}")
 
 
     async def receive(self, proc):
@@ -322,7 +325,7 @@ class BaseFile:
         self.batch = None
 
 
-    async def sanitize(self, proc, bar, depth):
+    async def sanitize(self, proc, bar, depth, gui):
         """Receive and convert representation files
 
         :param archive: Path to archive directory
@@ -331,7 +334,7 @@ class BaseFile:
         """
         self.batch = asyncio.Queue(depth)
 
-        publish_task = asyncio.create_task(self._publish(proc, bar))
+        publish_task = asyncio.create_task(self._publish(proc, bar, gui))
         consume_task = asyncio.create_task(self._consume())
 
         try:
@@ -349,7 +352,7 @@ class BaseFile:
                 self.batch.task_done()
 
 
-    async def _publish(self, proc, bar):
+    async def _publish(self, proc, bar, gui):
         """Receive initial representations and start their conversions"""
         pages = []
 
@@ -357,7 +360,7 @@ class BaseFile:
             rep = Representation(Path(self.pdf.parent, str(page)), "rgb", "png")
             await rep.receive(proc)
 
-            task = asyncio.create_task(rep.convert(bar))
+            task = asyncio.create_task(rep.convert(bar, gui))
             batch_e = BatchEntry(task, rep)
 
             try:
@@ -450,9 +453,14 @@ class Job:
         self.base = None
         self.proc = None
         self.pdf = None
+        self.gui = False
 
 
-    async def run(self, archive, depth, in_place):
+    async def run(self, archive, depth, in_place, gui):
+        self.gui = gui
+        if self.gui:
+            print(f"\n# {self.path.name}")
+
         self.proc = await asyncio.create_subprocess_exec(
             *CLIENT_VM_CMD,
             stdin=asyncio.subprocess.PIPE,
@@ -462,7 +470,7 @@ class Job:
         with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
             try:
                 await self._setup(tmpdir)
-                await self._start(archive, depth, in_place)
+                await self._start(archive, depth, in_place, gui)
             except (OSError,
                     PageError,
                     QrexecError,
@@ -512,11 +520,12 @@ class Job:
         self.base = BaseFile(self.path, pagenums, self.pdf)
 
 
-    async def _start(self, archive, depth, in_place):
+    async def _start(self, archive, depth, in_place, gui):
         await self.base.sanitize(
             self.proc,
             self.bar,
-            depth
+            depth,
+            gui
         )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
@@ -586,7 +595,8 @@ async def run(params):
     for job in jobs:
         tasks.append(asyncio.create_task(job.run(params["archive"],
                                                  params["batch"],
-                                                 params["in_place"])))
+                                                 params["in_place"],
+                                                 params["gui"])))
 
     asyncio.get_running_loop().add_signal_handler(
         signal.SIGINT,
@@ -647,6 +657,13 @@ async def run(params):
     "--in-place",
     is_flag=True,
     help="Replace original files instead of archiving them"
+)
+
+@click.option(
+    "-g",
+    "--gui",
+    is_flag=True,
+    help="Use a progress bar output understandable by zenity"
 )
 @click.argument(
     "files",
