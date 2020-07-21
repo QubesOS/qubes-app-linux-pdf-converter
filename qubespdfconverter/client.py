@@ -196,6 +196,39 @@ class Tqdm(tqdm.tqdm):
     def set_job_status(self, status):
         self.set_status(status.name.lower())
 
+class Zenity():
+
+    def __init__(self, name):
+        self.total = 0
+        self.n = 0
+        print(f"# {name}")
+
+    def set_job_status(self, status):
+        pass
+
+
+    def set_status(self, status):
+        pass
+
+
+    def reset(self, total):
+        self.total = total
+        self.n = 0
+
+
+    def refresh(self):
+        pass
+
+
+    def update(self, size):
+        self.n += size
+        print(f"{int(100*self.n/self.total)}")
+
+
+    def close(self):
+        pass
+
+
 
 class Representation:
     """Umbrella object for a file's initial and final representations
@@ -224,7 +257,7 @@ class Representation:
         self.dim = None
 
 
-    async def convert(self, bar, gui):
+    async def convert(self, bar):
         """Convert initial representation into final representation
 
         :param bar: Progress bar to update upon completion
@@ -253,10 +286,7 @@ class Representation:
         )
 
         bar.update(1)
-        if gui:
-            print(f"\n{int(100*bar.n/bar.total)}")
-        else:
-            bar.set_status(f"{bar.n}/{bar.total}")
+        bar.set_status(f"{bar.n}/{bar.total}")
 
 
     async def receive(self, proc):
@@ -325,7 +355,7 @@ class BaseFile:
         self.batch = None
 
 
-    async def sanitize(self, proc, bar, depth, gui):
+    async def sanitize(self, proc, bar, depth):
         """Receive and convert representation files
 
         :param archive: Path to archive directory
@@ -334,7 +364,7 @@ class BaseFile:
         """
         self.batch = asyncio.Queue(depth)
 
-        publish_task = asyncio.create_task(self._publish(proc, bar, gui))
+        publish_task = asyncio.create_task(self._publish(proc, bar))
         consume_task = asyncio.create_task(self._consume())
 
         try:
@@ -352,7 +382,7 @@ class BaseFile:
                 self.batch.task_done()
 
 
-    async def _publish(self, proc, bar, gui):
+    async def _publish(self, proc, bar):
         """Receive initial representations and start their conversions"""
         pages = []
 
@@ -360,7 +390,7 @@ class BaseFile:
             rep = Representation(Path(self.pdf.parent, str(page)), "rgb", "png")
             await rep.receive(proc)
 
-            task = asyncio.create_task(rep.convert(bar, gui))
+            task = asyncio.create_task(rep.convert(bar))
             batch_e = BatchEntry(task, rep)
 
             try:
@@ -436,9 +466,10 @@ class Job:
 
     :param path: Path to original, unsanitized file
     :param pos: Bar position
+    :param gui: True = the bar is for Zenity gui; False = the bar is for CLI
     """
 
-    def __init__(self, path, pos):
+    def __init__(self, path, pos, gui):
         """
 
         :param file: Base file
@@ -447,20 +478,18 @@ class Job:
         :param pdf: Path to temporary PDF for appending representations
         """
         self.path = path
-        self.bar = Tqdm(desc=f"{path}...0/?",
-                        bar_format=" {desc}",
-                        position=pos)
+        if gui:
+            self.bar = Zenity(path.name)
+        else:
+            self.bar = Tqdm(desc=f"{path}...0/?",
+                            bar_format=" {desc}",
+                            position=pos)
         self.base = None
         self.proc = None
         self.pdf = None
-        self.gui = False
 
 
-    async def run(self, archive, depth, in_place, gui):
-        self.gui = gui
-        if self.gui:
-            print(f"\n# {self.path.name}")
-
+    async def run(self, archive, depth, in_place):
         self.proc = await asyncio.create_subprocess_exec(
             *CLIENT_VM_CMD,
             stdin=asyncio.subprocess.PIPE,
@@ -470,7 +499,7 @@ class Job:
         with TemporaryDirectory(prefix="qvm-sanitize-") as tmpdir:
             try:
                 await self._setup(tmpdir)
-                await self._start(archive, depth, in_place, gui)
+                await self._start(archive, depth, in_place)
             except (OSError,
                     PageError,
                     QrexecError,
@@ -520,12 +549,11 @@ class Job:
         self.base = BaseFile(self.path, pagenums, self.pdf)
 
 
-    async def _start(self, archive, depth, in_place, gui):
+    async def _start(self, archive, depth, in_place):
         await self.base.sanitize(
             self.proc,
             self.bar,
-            depth,
-            gui
+            depth
         )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
@@ -591,12 +619,11 @@ async def run(params):
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
     tasks = []
-    jobs = [Job(f, i) for i, f in enumerate(params["files"])]
+    jobs = [Job(f, i, params["gui"]) for i, f in enumerate(params["files"])]
     for job in jobs:
         tasks.append(asyncio.create_task(job.run(params["archive"],
                                                  params["batch"],
-                                                 params["in_place"],
-                                                 params["gui"])))
+                                                 params["in_place"])))
 
     asyncio.get_running_loop().add_signal_handler(
         signal.SIGINT,
