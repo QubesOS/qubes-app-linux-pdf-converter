@@ -37,7 +37,6 @@ from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import magic
 import uno
-from com.sun.star.beans import PropertyValue
 
 DEPTH = 8
 STDIN_READ_SIZE = 65536
@@ -243,11 +242,11 @@ class BaseFile:
         smgr = ctx.ServiceManager
         desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
 
-        hidden_property = PropertyValue()
+        hidden_property = uno.createUnoStruct("com.sun.star.beans.PropertyValue")
         hidden_property.Name = "Hidden"
         hidden_property.Value = True
 
-        password_property = PropertyValue()
+        password_property = uno.createUnoStruct("com.sun.star.beans.PropertyValue")
         password_property.Name = "Password"
         password_property.Value = self.password
 
