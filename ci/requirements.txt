@@ -6,3 +6,4 @@ pylint
 tqdm
 file-magic
 unotools
+uno
