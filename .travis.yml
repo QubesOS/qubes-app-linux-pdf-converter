@@ -3,14 +3,13 @@ import:
   - source: QubesOS/qubes-continuous-integration:R4.1/travis-dom0-r4.1.yml
   - source: QubesOS/qubes-continuous-integration:R4.0/travis-dom0-r4.0.yml
   - source: QubesOS/qubes-continuous-integration:R4.1/travis-vms-r4.1.yml
-before_install:
-  - sudo apt-get -y install libreoffice
 jobs:
   include:
     - language: python
       python:
        - '3.7'
       install:
+       - sudo apt-get -y install libreoffice
        - pip install --quiet -r ci/requirements.txt
       script:
        - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
