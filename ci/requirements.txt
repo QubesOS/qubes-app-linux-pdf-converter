@@ -5,5 +5,4 @@ pillow
 pylint
 tqdm
 file-magic
-unotools
-uno
+pyoo
