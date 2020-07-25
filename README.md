@@ -39,9 +39,14 @@ Directory for storing archived files
 -------------------------
 Replace original files instead of archiving them
 
+**-g**, **`--`gui**
+---------------------
+Use a progress bar output understandable by zenity.
+
 **`--`help**
 -------------
 Show this message and exit.
+
 
 CONFIGURATION
 ===============
