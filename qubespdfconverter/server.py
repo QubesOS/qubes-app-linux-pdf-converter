@@ -209,11 +209,65 @@ class BaseFile:
         self.batch = None
         self.password = ""
 
-    def _read_password(self, password_success):
+
+    def _prompt_password(self, password_success):
         if not password_success:
             cmd = ["zenity", "--title", "File protected by password", "--password"]
-            self.password = subprocess.run(cmd, capture_output=True, check=True)\
-                .stdout.split(b"\n")[0]
+            self.password = subprocess.run(
+                    cmd, capture_output=True, check=True).stdout.split(b"\n")[0]
+
+
+    def _verify_password_pdf(self):
+        cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
+        while True:
+            try:
+                subprocess.run(cmd, capture_output=True, check=True)
+                return
+            except subprocess.CalledProcessError:
+                self._prompt_password(False)
+
+
+    def _convert_office_file_to_pdf(self):
+        # Performance could be improved by only starting
+        # the libreoffice when needed (aka: when the file need to be decrypted).
+        # But code is simpler that way
+
+        # Launch libreoffice server
+        cmd = [
+            "libreoffice",
+            "--accept=socket,host=localhost,port=2202;urp;",
+            "--norestore",
+            "--nologo",
+            "--nodefault"
+        ]
+        with subprocess.Popen(cmd, stderr=open(os.devnull, 'wb')) as libreoffice_process:
+
+            # Wait until libreoffice server is ready
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                while sock.connect_ex(('127.0.0.1', 2202)) != 0:
+                    time.sleep(1)
+
+            # Remove password from file using libreoffice API
+            while True:
+                try:
+                    self._decrypt()
+                    break
+                except:
+                    self._prompt_password(False)
+            libreoffice_process.terminate()
+
+        cmd = [
+            "libreoffice",
+            "--convert-to",
+            "pdf",
+            str(self.path) + ".nopassword",
+            "--outdir",
+            self.path.parents[0]
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+        os.remove(str(self.path) + ".nopassword")
+        os.rename(str(self.path) + ".pdf", str(self.path))
 
 
     def _decrypt(self):
@@ -228,8 +282,8 @@ class BaseFile:
         - Store the document without additionnal properties [this remove the password]
         """
 
-        src = "file://"+str(self.path)
-        dst = "file://"+str(self.path)+".nopassword"
+        src = f"file://{self.path}"
+        dst = f"file://{self.path}.nopassword"
 
         local_context = uno.getComponentContext()
         resolver = local_context.ServiceManager.createInstanceWithContext(
@@ -262,62 +316,17 @@ class BaseFile:
     async def sanitize(self):
         """Start sanitization tasks"""
 
-        password_success = False
         mimetype = magic.detect_from_filename(str(self.path)).mime_type
+
         if mimetype.startswith("video/") or mimetype.startswith("audio/"):
             raise ValueError
         if mimetype.startswith("image/"):
             self.pagenums = 1
         else:
             if mimetype == "application/pdf":
-                while not password_success:
-                    cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
-                    try:
-                        password_success = not b"Incorrect password" in subprocess.\
-                                run(cmd, capture_output=True, check=True).stderr
-                    except subprocess.CalledProcessError:
-                        password_success = False
-                        self._read_password(password_success)
+                self._verify_password_pdf()
             else:
-                # Performance could be improved by only starting
-                # the libreoffice when needed (aka: when the file need to be decrypted).
-                # But code is simpler that way
-
-                # Launch libreoffice server
-                cmd = [
-                    "libreoffice",
-                    "--accept=socket,host=localhost,port=2202;urp;",
-                    "--norestore",
-                    "--nologo",
-                    "--nodefault"
-                ]
-                libreoffice_process = subprocess.Popen(cmd, stderr=open(os.devnull, 'wb'))
-
-                # Wait until libreoffice server is ready
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                while sock.connect_ex(('127.0.0.1', 2202)) != 0:
-                    time.sleep(1)
-
-                # Remove password from file using libreoffice API
-                while not password_success:
-                    try:
-                        self._decrypt()
-                        password_success = True
-                    except:
-                        self._read_password(False)
-
-                libreoffice_process.terminate()
-                cmd = [
-                    "libreoffice",
-                    "--convert-to",
-                    "pdf",
-                    str(self.path) + ".nopassword",
-                    "--outdir",
-                    self.path.parents[0]
-                ]
-                subprocess.run(cmd, capture_output=True, check=True)
-                os.rename(str(self.path) + ".pdf", str(self.path))
+                self._convert_office_file_to_pdf()
 
             self.pagenums = self._pagenums()
 

@@ -9,7 +9,6 @@ jobs:
       python:
        - '3.7'
       install:
-       - sudo apt-get -y install libreoffice
        - pip install --quiet -r ci/requirements.txt
       script:
        - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
