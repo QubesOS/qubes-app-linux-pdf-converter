@@ -266,8 +266,8 @@ class BaseFile:
             self.path.parents[0]
         ]
         subprocess.run(cmd, capture_output=True, check=True)
-        os.remove(str(self.path) + ".nopassword")
-        os.rename(str(self.path) + ".pdf", str(self.path))
+        Path(f"{self.path}.nopassword").unlink()
+        Path(f"{self.path}.pdf").rename(self.path)
 
 
     def _decrypt(self):
