@@ -36,7 +36,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import magic
-import uno
+import uno # pylint: disable=import-error
 
 DEPTH = 8
 STDIN_READ_SIZE = 65536

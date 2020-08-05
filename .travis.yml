@@ -6,13 +6,9 @@ import:
 jobs:
   include:
       language: python
-      virtualenv:
-          system_site_packages: true
       python:
        - '3.7'
       install:
-       - sudo apt update
-       - sudo apt install -qq -y libreoffice libreoffice-script-provider-python
        - pip install --quiet -r ci/requirements.txt
       script:
        - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
