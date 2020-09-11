@@ -27,7 +27,7 @@ import os
 import setuptools.command.install
 from setuptools import setup
 
-if sys.version_info[0:2] < (3, 7):
+if sys.version_info[0:2] < (3, 6):
     # on older python install just tests (dom0 package)
     packages = ['qubespdfconverter.tests']
 else:
