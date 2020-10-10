@@ -1,3 +1,116 @@
+qubes-pdf-converter (2.1.9-1) unstable; urgency=medium
+
+  [ Frédéric Pierret (fepitre) ]
+  * debian: conditional python version dependencies
+  * debian: fix typo in rules
+  * debian: update control syntax for python nautilus
+
+  [ Jason Phan ]
+  * readme: Remove extra parenthesis
+  * wrapper: Update qvm-convert-pdf into Python 3
+  * wrapper: Add logging and trim options
+  * wrapper: Prepare for multiple file support
+  * wrapper: Remove unneeded main() try block
+  * wrapper: Remove logging
+  * client: Update to Python 3
+  * wrapper, client: Re-add logging
+  * wrapper: PEP 8
+  * client: Add qrexec wrapper functions
+  * client: PEP 8
+  * server: Refactor to Python 3
+  * client, server: Add documentation
+  * server: Make check_output() return a String instead of a bytestring
+  * wrapper: Add documentation
+  * Add .py extensions and update install commands
+  * readme: Update usage example
+  * wrapper: Fix leftover debugging command
+  * wrapper: Trim down argument parsing
+  * wrapper: Move logging config to global namespace
+  * client, server: Fix stream flushing
+  * client: Handle EOFErrors if server suddenly dies
+  * server: Avoid errors if subprocess command fails
+  * server, client: Grammar
+  * client: Use OG stdout file descriptor
+  * server: Fix location of STDOUT flush call
+  * wrapper: Simplify argument parsing
+  * wrapper: Add non-file check
+  * wrapper, client, server: Qualify variable names
+  * server, client: Remove unecessary documentation
+  * readme: Update language
+  * Add support for multiple files
+  * Update docs
+  * client, server: Replace recv() with recvline_b()
+  * client: Remove redundant check condition
+  * client, server: Add custom exceptions
+  * client, server: Update utility functions
+  * client: Combine image dimension functions
+  * client, server: Update initial phase
+  * client, server: Update to asyncio and new model
+  * client, server: Move to pdf-converter directory
+  * meta: Remove extra file
+  * tests: Moved to pdf-converter/tests
+  * meta: Remove extra file
+  * meta: Remove wrapper
+  * client: Fix error handling for readexactly()
+  * client: Remove extra byte for send()
+  * client: Remove unneeded PID prefix for tmpdir
+  * client: Remove unused recv()
+  * server: Remove uneeded quoting in identify command
+  * Rename source directory
+  * client: Start batch processing code
+  * client: Add CLI parameter handling
+  * client: Update error handling
+  * server: Remove recv_pdf()
+  * server: Update error handling
+  * server: Update sending process
+  * client: Replace click.echo()
+  * client, server: Add Representation & *File objects
+  * server: Remove nonexistent PageError
+  * client, server: Remove unused imports
+  * client, server: Rename unsanitized file class
+  * client: Add --archive, --dry-run, and --in-place
+  * client: Implement --in-place
+  * client: Add initial version of tqdm output
+  * client: Replace namedtuple with dataclass
+  * client, server: Update UI, design, and error handling
+  * client: Fix lower bound for batch size
+  * client: Update shebang to 3.7
+  * setup: Add tqdm dependency
+  * client: Update docstring
+  * client, server: Replace shellcheck with pylint
+  * travis: Add pylint dependency
+  * travis: fix paths and try without --exit-code
+  * travis: Re-add --exit-code because i was right the first time
+  * travis: Attempt to fix pylint
+  * travis: remove --exit-code
+  * travis: Update imports and pylint exceptions
+  * client: Use python3 shebang
+  * server: Handle non-ASCII output from pdfinfo(1)
+  * server: Prevent CPU hogging by PNG tasks
+  * server: Rename batch entry variables
+  * client: Implement bulk saves and remove reps appropriately
+  * client: Exit with 1 on error
+  * meta: Copyright info
+  * pylint: Add bad-continuation to .pylintrc
+  * client: Simplify image appending
+  * client: Fix output spacing
+  * client: Handle out of space error
+  * client: Add support for older tqdm versions
+  * pylint: Add expression-not-assigned
+  * makefile: Resolve makefile conflict
+
+  [ Marek Marczykowski-Górecki ]
+  * Adjust dependencies after python rewrite
+  * travis: include R4.0 dom0 too
+  * Install only tests with older python
+  * Move tests back to qubespdfconverter.tests
+  * Add qubespdfconverter/__init__.py
+  * Drop executable bit from nautilus extension
+  * Use proper python package installation for the VM part too
+  * require python 3.7+, exclude stretch, jessie and centos
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sat, 10 Oct 2020 16:24:35 +0200
+
 qubes-pdf-converter (2.1.8-1) unstable; urgency=medium
 
   [ Frédéric Pierret (fepitre) ]
