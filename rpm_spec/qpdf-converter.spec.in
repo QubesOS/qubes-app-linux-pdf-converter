@@ -54,7 +54,7 @@ The Qubes service for converting untrusted PDF files into trusted ones.
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-vm DESTDIR=$RPM_BUILD_ROOT
+make install-vm DESTDIR=$RPM_BUILD_ROOT PYTHON=%{__python3}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
