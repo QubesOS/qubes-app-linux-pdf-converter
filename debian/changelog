@@ -1,3 +1,10 @@
+qubes-pdf-converter (2.1.10-1) unstable; urgency=medium
+
+  [ Frédéric Pierret (fepitre) ]
+  * Python38 is now available for CentOS8
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sun, 18 Oct 2020 06:29:47 +0200
+
 qubes-pdf-converter (2.1.9-1) unstable; urgency=medium
 
   [ Frédéric Pierret (fepitre) ]
