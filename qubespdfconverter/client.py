@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013 Joanna Rutkowska <joanna@invisiblethingslab.com>
 # Copyright (C) 2020 Jason Phan <td.satch@gmail.com>
@@ -21,20 +21,19 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 import asyncio
-import click
 import functools
 import logging
 import shutil
 import signal
 import subprocess
 import sys
-import tqdm
-
 from enum import Enum, auto
 from dataclasses import dataclass
 from pathlib import Path
-from PIL import Image
 from tempfile import TemporaryDirectory
+from PIL import Image
+import tqdm
+import click
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
@@ -184,7 +183,6 @@ async def recvline(proc):
     untrusted_data = await proc.stdout.readline()
     if not untrusted_data:
         raise EOFError
-
     return untrusted_data.decode("ascii").rstrip()
 
 
@@ -232,6 +230,7 @@ class Representation:
         :param bar: Progress bar to update upon completion
         """
         cmd = [
+            "gm",
             "convert",
             "-size",
             f"{self.dim.width}x{self.dim.height}",
@@ -294,7 +293,6 @@ class Representation:
             size = width * height * 3
         else:
             raise ValueError
-
         return ImageDimensions(width, height, size)
 
 
@@ -390,10 +388,12 @@ class BaseFile:
 
         for page in pages:
             try:
-                images.append(await asyncio.get_running_loop().run_in_executor(
-                    None,
-                    Image.open,
-                    Path(self.pdf.parent, f"{page}.png"))
+                images.append(
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        Image.open,
+                        Path(self.pdf.parent, f"{page}.png")
+                    )
                 )
             except IOError as e:
                 for image in images:
@@ -549,7 +549,6 @@ class Job:
             None,
             self.path.read_bytes
         )
-
         try:
             await send(self.proc, data)
         except BrokenPipeError as e:
@@ -582,7 +581,6 @@ class Job:
 async def run(params):
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
-
     tasks = []
     jobs = [Job(f, i) for i, f in enumerate(params["files"])]
     for job in jobs:
@@ -612,7 +610,10 @@ async def run(params):
         if tqdm.__version__ >= "4.34.0":
             print()
         else:
-            print() if len(jobs) == 1 else print("\n" * len(jobs))
+            if len(jobs) == 1:
+                print()
+            else:
+                print("\n" * len(jobs))
 
         while not ERROR_LOGS.empty():
             err_msg = await ERROR_LOGS.get()

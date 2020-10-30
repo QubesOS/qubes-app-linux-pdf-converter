@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013 Joanna Rutkowska <joanna@invisiblethingslab.com>
 # Copyright (C) 2020 Jason Phan <td.satch@gmail.com>
@@ -20,17 +20,27 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+###########################
+# A similar project exist:
+# - https://github.com/firstlookmedia/dangerzone-converter
+# Both projects can improve the other.
+###########################
+
 import asyncio
 import subprocess
 import sys
-
-from dataclasses import dataclass
+import os
+import socket
+import time
 from pathlib import Path
+from dataclasses import dataclass
 from tempfile import TemporaryDirectory
+import magic
+import uno
+from com.sun.star.beans import PropertyValue
 
 DEPTH = 8
 STDIN_READ_SIZE = 65536
-
 
 def unlink(path):
     """Wrapper for pathlib.Path.unlink(path, missing_ok=True)"""
@@ -114,9 +124,10 @@ class Representation:
         self.dim = None
 
 
-    async def convert(self):
+    async def convert(self, password):
         """Convert initial representation to final representation"""
         cmd = [
+            "gm",
             "convert",
             str(self.initial),
             "-depth",
@@ -124,7 +135,7 @@ class Representation:
             f"rgb:{self.final}"
         ]
 
-        await self.create_irep()
+        await self.create_irep(password)
         self.dim = await self._dim()
 
         proc = await asyncio.create_subprocess_exec(*cmd)
@@ -138,10 +149,14 @@ class Representation:
             )
 
 
-    async def create_irep(self):
+    async def create_irep(self, password):
         """Create initial representation"""
         cmd = [
             "pdftocairo",
+            "-opw",
+            password,
+            "-upw",
+            password,
             str(self.path),
             "-png",
             "-f",
@@ -151,14 +166,23 @@ class Representation:
             "-singlefile",
             str(Path(self.initial.parent, self.initial.stem))
         ]
-
         proc = await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc, cmd)
+        try:
+            await wait_proc(proc, cmd)
+        except subprocess.CalledProcessError:
+            cmd = [
+                "gm",
+                "convert",
+                str(self.path),
+                f"png:{self.initial}"
+            ]
+            proc = await asyncio.create_subprocess_exec(*cmd)
+            await wait_proc(proc, cmd)
 
 
     async def _dim(self):
         """Identify image dimensions of initial representation"""
-        cmd = ["identify", "-format", "%w %h", str(self.initial)]
+        cmd = ["gm", "identify", "-format", "%w %h", str(self.initial)]
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=subprocess.PIPE
@@ -169,8 +193,7 @@ class Representation:
         except asyncio.CancelledError:
             await terminate_proc(proc)
             raise
-
-        return output.decode("ascii")
+        return output.partition(b"\n")[0].decode("ascii")
 
 
 @dataclass(frozen=True)
@@ -185,15 +208,122 @@ class BaseFile:
         self.path = path
         self.pagenums = 0
         self.batch = None
+        self.password = ""
+
+    def _read_password(self, password_success):
+        if not password_success:
+            cmd = ["zenity", "--title", "File protected by password", "--password"]
+            self.password = subprocess.run(cmd, capture_output=True, check=True)\
+                .stdout.split(b"\n")[0]
+
+
+    def _decrypt(self):
+        """
+        Try to remove the password of a libreoffice-compatible file,
+        and store the resulting file in INITIAL_NAME.nopassword.
+        The steps are:
+        - Connect to a libreoffice API server, listening on localhost on port 2202
+        - Try to load a document with additionnal properties:
+              - "Hidden" to not load any libreoffice GUI
+              - "Password" to automatically try to decrypt the document
+        - Store the document without additionnal properties [this remove the password]
+        """
+
+        src = "file://"+str(self.path)
+        dst = "file://"+str(self.path)+".nopassword"
+
+        local_context = uno.getComponentContext()
+        resolver = local_context.ServiceManager.createInstanceWithContext(
+            "com.sun.star.bridge.UnoUrlResolver",
+            local_context
+        )
+        ctx = resolver.resolve(
+            "uno:socket,host=localhost,port=2202;urp;StarOffice.ComponentContext"
+        )
+        smgr = ctx.ServiceManager
+        desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+
+        hidden_property = PropertyValue()
+        hidden_property.Name = "Hidden"
+        hidden_property.Value = True
+
+        password_property = PropertyValue()
+        password_property.Name = "Password"
+        password_property.Value = self.password
+
+        document = desktop.loadComponentFromURL(
+            src,
+            "_blank",
+            0,
+            (password_property, hidden_property,)
+        )
+        document.storeAsURL(dst, ())
 
 
     async def sanitize(self):
         """Start sanitization tasks"""
-        self.pagenums = self._pagenums()
+
+        password_success = False
+        mimetype = magic.detect_from_filename(str(self.path)).mime_type
+        if mimetype.startswith("video/") or mimetype.startswith("audio/"):
+            raise ValueError
+        if mimetype.startswith("image/"):
+            self.pagenums = 1
+        else:
+            if mimetype == "application/pdf":
+                while not password_success:
+                    cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
+                    try:
+                        password_success = not b"Incorrect password" in subprocess.\
+                                run(cmd, capture_output=True, check=True).stderr
+                    except subprocess.CalledProcessError:
+                        password_success = False
+                        self._read_password(password_success)
+            else:
+                # Performance could be improved by only starting
+                # the libreoffice when needed (aka: when the file need to be decrypted).
+                # But code is simpler that way
+
+                # Launch libreoffice server
+                cmd = [
+                    "libreoffice",
+                    "--accept=socket,host=localhost,port=2202;urp;",
+                    "--norestore",
+                    "--nologo",
+                    "--nodefault"
+                ]
+                libreoffice_process = subprocess.Popen(cmd, stderr=open(os.devnull, 'wb'))
+
+                # Wait until libreoffice server is ready
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                while sock.connect_ex(('127.0.0.1', 2202)) != 0:
+                    time.sleep(1)
+
+                # Remove password from file using libreoffice API
+                while not password_success:
+                    try:
+                        self._decrypt()
+                        password_success = True
+                    except:
+                        self._read_password(False)
+
+                libreoffice_process.terminate()
+                cmd = [
+                    "libreoffice",
+                    "--convert-to",
+                    "pdf",
+                    str(self.path) + ".nopassword",
+                    "--outdir",
+                    self.path.parents[0]
+                ]
+                subprocess.run(cmd, capture_output=True, check=True)
+                os.rename(str(self.path) + ".pdf", str(self.path))
+
+            self.pagenums = self._pagenums()
+
         self.batch = asyncio.Queue(self.pagenums)
-
         send(self.pagenums)
-
         publish_task = asyncio.create_task(self._publish())
         consume_task = asyncio.create_task(self._consume())
 
@@ -212,7 +342,7 @@ class BaseFile:
 
     def _pagenums(self):
         """Return the number of pages in the suspect file"""
-        cmd = ["pdfinfo", str(self.path)]
+        cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
         output = subprocess.run(cmd, capture_output=True, check=True)
         pages = 0
 
@@ -232,7 +362,7 @@ class BaseFile:
                 "png",
                 "rgb"
             )
-            task = asyncio.create_task(rep.convert())
+            task = asyncio.create_task(rep.convert(self.password))
             batch_e = BatchEntry(task, rep)
             await self.batch.join()
 
@@ -259,7 +389,6 @@ class BaseFile:
                 unlink,
                 batch_e.rep.final
             )
-
             await asyncio.get_running_loop().run_in_executor(
                 None,
                 send,

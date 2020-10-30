@@ -2,7 +2,7 @@
 # This is the SPEC file for creating binary and source RPMs for the VMs.
 #
 #
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013  Joanna Rutkowska <joanna@invisiblethingslab.com>
 #
@@ -31,7 +31,7 @@ Summary:    Qubes policy for qpdf-converter
 Group:		Qubes
 Vendor:		Invisible Things Lab
 License:	GPL
-URL:		http://www.qubes-os.org
+URL:		https://github.com/QubesOS/qubes-app-linux-pdf-converter
 
 BuildRequires: python%{python3_pkgversion}-devel
 

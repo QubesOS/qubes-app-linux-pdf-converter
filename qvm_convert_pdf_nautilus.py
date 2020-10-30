@@ -5,7 +5,7 @@ from gi.repository import Nautilus, GObject
 
 
 class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
-    '''Send PDF to disposable virtual machine to convert to a safe format.
+    '''Send file to disposable virtual machine to convert to a safe format.
 
     Uses the nautilus-python api to provide a context menu within Nautilus which
     will enable the user to select PDF file(s) to send to a disposable virtual
@@ -18,7 +18,6 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
         if not files:
             return
 
-        # TODO:  Only allow pdf files
         for file_obj in files:
 
             # Do not attach context menu to a directory
@@ -28,11 +27,6 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
             # Do not attach context menu  to anything other that a file
             # local files only; not remote
             if file_obj.get_uri_scheme() != 'file':
-                return
-
-            # Only attach context menu to pdf files
-            filename, ext = os.path.splitext(file_obj.get_name())
-            if ext and ext.lower() not in ['.pdf']:
                 return
 
         menu_item = Nautilus.MenuItem(name='QubesMenuProvider::ConvertPdf',

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013  Joanna Rutkowska <joanna@invisiblethingslab.com>
 #
@@ -24,6 +24,4 @@ if [ $# -ne 1 ]; then
 exit 1
 fi
 
-export PROGRESS_FOR_GUI="yes"
-
-/usr/bin/qvm-convert-pdf "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
+/usr/bin/qvm-convert-pdf -g "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
