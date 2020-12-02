@@ -8,8 +8,8 @@ include:
   - project: 'QubesOS/qubes-continuous-integration'
     file: '/r4.1/gitlab-vm.yml'
 
-tests:pylint:
-  stage: tests
+checks:pylint:
+  stage: checks
   before_script:
     - pip3 install --quiet -r ci/requirements.txt
   script:
