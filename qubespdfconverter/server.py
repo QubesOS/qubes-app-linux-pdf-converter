@@ -218,9 +218,9 @@ class BaseFile:
 
 
     def _verify_password_pdf(self):
-        cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
         while True:
             try:
+                cmd = ["pdfinfo", "-opw", self.password, "-upw", self.password, str(self.path)]
                 subprocess.run(cmd, capture_output=True, check=True)
                 return
             except subprocess.CalledProcessError:
@@ -235,12 +235,11 @@ class BaseFile:
         # Launch libreoffice server
         cmd = [
             "libreoffice",
-            "--accept=socket,host=localhost,port=2202;urp;",
-            "--norestore",
-            "--nologo",
-            "--nodefault"
+            "--accept=socket,host=localhost,port=2202;urp",
+            "--headless"
         ]
-        with subprocess.Popen(cmd, stderr=open(os.devnull, 'wb')) as libreoffice_process:
+        path = {"PATH": os.environ['PATH']}
+        with subprocess.Popen(cmd, stderr=open(os.devnull, 'wb'), env=path) as libreoffice_process:
 
             # Wait until libreoffice server is ready
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
