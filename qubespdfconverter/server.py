@@ -36,6 +36,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import magic
+import shutil
 import uno # pylint: disable=import-error
 
 DEPTH = 8
@@ -226,11 +227,46 @@ class BaseFile:
             except subprocess.CalledProcessError:
                 self._prompt_password(False)
 
+    def _convert_office_file_to_pdf_without_password(self):
+        # The way libreoffice handle password changed with this commit
+        # https://github.com/LibreOffice/core/commit/0de0b1b64a1c122254bb821ea0eb9b038875e8d4
+        # Before this commit we could try to decrypt a non encrypted file, and
+        # it would be a success.
+        # After this commit, trying to decrypt a non encrypted file result in
+        # a failure.
+        # A patch could be applied to restore this behavior without breaking the
+        # other improvement. I suggested this patch
+        # https://bug-attachments.documentfoundation.org/attachment.cgi?id=170502
+        # However since I don't know if (or when) this patch (or a similar patch) will be
+        # accepted, I tried to write a workaroud
+        # 1: Try to convert the office file to PDF
+        # 2: If it succed: All good, EXIT
+        # 3: If it fail: Assume it is because it is encrypted
+        # 4: Try to decrypt it
+        # 5: Convert the office file to PDF
+        file = f"{self.path}.nopassword"
+        if not Path(file).exists():
+            shutil.copy(self.path, file)
+        cmd = [
+            "libreoffice",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            file,
+            "--outdir",
+            self.path.parents[0]
+        ]
+        converter = subprocess.run(cmd, capture_output=True, check=True)
+        Path(file).unlink()
+        if len(converter.stderr) == 0:
+            Path(f"{self.path}.pdf").rename(self.path)
+            return True
+        return False
+
 
     def _convert_office_file_to_pdf(self):
-        # Performance could be improved by only starting
-        # the libreoffice when needed (aka: when the file need to be decrypted).
-        # But code is simpler that way
+        if self._convert_office_file_to_pdf_without_password():
+            return
 
         # Launch libreoffice server
         cmd = [
@@ -238,8 +274,8 @@ class BaseFile:
             "--accept=socket,host=localhost,port=2202;urp",
             "--headless"
         ]
-        path = {"PATH": os.environ['PATH']}
-        with subprocess.Popen(cmd, stderr=open(os.devnull, 'wb'), env=path) as libreoffice_process:
+
+        with subprocess.Popen(cmd, stderr=open(os.devnull, 'wb')) as libreoffice_process:
 
             # Wait until libreoffice server is ready
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -256,17 +292,7 @@ class BaseFile:
                     self._prompt_password(False)
             libreoffice_process.terminate()
 
-        cmd = [
-            "libreoffice",
-            "--convert-to",
-            "pdf",
-            str(self.path) + ".nopassword",
-            "--outdir",
-            self.path.parents[0]
-        ]
-        subprocess.run(cmd, capture_output=True, check=True)
-        Path(f"{self.path}.nopassword").unlink()
-        Path(f"{self.path}.pdf").rename(self.path)
+        self._convert_office_file_to_pdf_without_password()
 
 
     def _decrypt(self):
