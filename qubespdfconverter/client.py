@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013 Joanna Rutkowska <joanna@invisiblethingslab.com>
 # Copyright (C) 2020 Jason Phan <td.satch@gmail.com>
@@ -21,20 +21,19 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 import asyncio
-import click
 import functools
 import logging
 import shutil
 import signal
 import subprocess
 import sys
-import tqdm
-
 from enum import Enum, auto
 from dataclasses import dataclass
 from pathlib import Path
-from PIL import Image
 from tempfile import TemporaryDirectory
+from PIL import Image
+import tqdm
+import click
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
@@ -184,7 +183,6 @@ async def recvline(proc):
     untrusted_data = await proc.stdout.readline()
     if not untrusted_data:
         raise EOFError
-
     return untrusted_data.decode("ascii").rstrip()
 
 
@@ -197,6 +195,39 @@ class Tqdm(tqdm.tqdm):
 
     def set_job_status(self, status):
         self.set_status(status.name.lower())
+
+class Zenity():
+
+    def __init__(self, name):
+        self.total = 0
+        self.n = 0
+        print(f"# {name}")
+
+    def set_job_status(self, status):
+        pass
+
+
+    def set_status(self, status):
+        pass
+
+
+    def reset(self, total):
+        self.total = total
+        self.n = 0
+
+
+    def refresh(self):
+        pass
+
+
+    def update(self, size):
+        self.n += size
+        print(f"{int(100*self.n/self.total)}")
+
+
+    def close(self):
+        pass
+
 
 
 class Representation:
@@ -232,6 +263,7 @@ class Representation:
         :param bar: Progress bar to update upon completion
         """
         cmd = [
+            "gm",
             "convert",
             "-size",
             f"{self.dim.width}x{self.dim.height}",
@@ -294,7 +326,6 @@ class Representation:
             size = width * height * 3
         else:
             raise ValueError
-
         return ImageDimensions(width, height, size)
 
 
@@ -390,10 +421,12 @@ class BaseFile:
 
         for page in pages:
             try:
-                images.append(await asyncio.get_running_loop().run_in_executor(
-                    None,
-                    Image.open,
-                    Path(self.pdf.parent, f"{page}.png"))
+                images.append(
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        Image.open,
+                        Path(self.pdf.parent, f"{page}.png")
+                    )
                 )
             except IOError as e:
                 for image in images:
@@ -433,9 +466,10 @@ class Job:
 
     :param path: Path to original, unsanitized file
     :param pos: Bar position
+    :param gui: True = the bar is for Zenity gui; False = the bar is for CLI
     """
 
-    def __init__(self, path, pos):
+    def __init__(self, path, pos, gui):
         """
 
         :param file: Base file
@@ -444,9 +478,12 @@ class Job:
         :param pdf: Path to temporary PDF for appending representations
         """
         self.path = path
-        self.bar = Tqdm(desc=f"{path}...0/?",
-                        bar_format=" {desc}",
-                        position=pos)
+        if gui:
+            self.bar = Zenity(path.name)
+        else:
+            self.bar = Tqdm(desc=f"{path}...0/?",
+                            bar_format=" {desc}",
+                            position=pos)
         self.base = None
         self.proc = None
         self.pdf = None
@@ -549,7 +586,6 @@ class Job:
             None,
             self.path.read_bytes
         )
-
         try:
             await send(self.proc, data)
         except BrokenPipeError as e:
@@ -582,9 +618,8 @@ class Job:
 async def run(params):
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
-
     tasks = []
-    jobs = [Job(f, i) for i, f in enumerate(params["files"])]
+    jobs = [Job(f, i, params["gui"]) for i, f in enumerate(params["files"])]
     for job in jobs:
         tasks.append(asyncio.create_task(job.run(params["archive"],
                                                  params["batch"],
@@ -612,7 +647,10 @@ async def run(params):
         if tqdm.__version__ >= "4.34.0":
             print()
         else:
-            print() if len(jobs) == 1 else print("\n" * len(jobs))
+            if len(jobs) == 1:
+                print()
+            else:
+                print("\n" * len(jobs))
 
         while not ERROR_LOGS.empty():
             err_msg = await ERROR_LOGS.get()
@@ -646,6 +684,13 @@ async def run(params):
     "--in-place",
     is_flag=True,
     help="Replace original files instead of archiving them"
+)
+
+@click.option(
+    "-g",
+    "--gui",
+    is_flag=True,
+    help="Use a progress bar output understandable by zenity"
 )
 @click.argument(
     "files",

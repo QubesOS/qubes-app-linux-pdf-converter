@@ -2,7 +2,7 @@
 # This is the SPEC file for creating binary and source RPMs for the VMs.
 #
 #
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2013  Joanna Rutkowska <joanna@invisiblethingslab.com>
 #
@@ -31,18 +31,19 @@ Summary:	The Qubes service for converting untrusted PDF files into trusted ones
 Group:		Qubes
 Vendor:		Invisible Things Lab
 License:	GPL
-URL:		http://www.qubes-os.org
+URL:		https://github.com/QubesOS/qubes-app-linux-pdf-converter
 
 BuildRequires: pandoc 
 BuildRequires: python%{python3_pkgversion}-setuptools
 BuildRequires: python%{python3_pkgversion}-devel
 
-Requires:	poppler-utils ImageMagick
+Requires:	poppler-utils GraphicsMagick libreoffice
 Requires:	nautilus-python
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
 Requires:	python%{python3_pkgversion}-tqdm
+Requires:	python%{python3_pkgversion}-magic
 
 Source0: %{name}-%{version}.tar.gz
 

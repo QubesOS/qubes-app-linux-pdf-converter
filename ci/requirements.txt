@@ -4,3 +4,4 @@ click
 pillow
 pylint
 tqdm
+file-magic
