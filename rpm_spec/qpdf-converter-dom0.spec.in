@@ -33,6 +33,7 @@ Vendor:		Invisible Things Lab
 License:	GPL
 URL:		http://www.qubes-os.org
 
+BuildRequires: make
 BuildRequires: python%{python3_pkgversion}-devel
 
 Source0: %{name}-%{version}.tar.gz
