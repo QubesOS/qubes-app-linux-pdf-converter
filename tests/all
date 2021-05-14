@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# The password is "toor"
+relative_directory=$(dirname "$0")
+
+rm -f "$relative_directory"/files_success/*.trusted.pdf
+
+for file in "$relative_directory"/files_success/*; do
+ echo "Converting $file"
+ sed 's#CLIENT_VM_CMD\s*=.*$#CLIENT_VM_CMD = ["'"$relative_directory"'/../qubespdfconverter/server.py"]#g' "$relative_directory"/../qubespdfconverter/client.py | python3 - -a "$relative_directory"/files_success/  "$file"
+ error_code=$?
+ if [ $error_code -ne 0 ]; then
+	 echo "Conversion failed!"
+	 exit 1
+ fi
+done
+
+for file in "$relative_directory"/files_error/*; do
+ echo "Converting $file"
+ sed 's#CLIENT_VM_CMD\s*=.*$#CLIENT_VM_CMD = ["'"$relative_directory"'/../qubespdfconverter/server.py"]#g' "$relative_directory"/../qubespdfconverter/client.py | python3 - -a "$relative_directory"/files_errors/  "$file"
+ error_code=$?
+ if [ $error_code -eq 0 ]; then
+	 echo "The conversion should be failing"
+	 exit 1
+ fi
+done
+
+echo "Everything seems to be OK"

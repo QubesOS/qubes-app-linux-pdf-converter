@@ -1,27 +1,25 @@
 Source: qubes-pdf-converter
 Section: admin
-Priority: extra
+Priority: optional
 Maintainer: Jason Mehring <nrgaway@gmail.com>
-Build-Depends:
- debhelper (>= 9~),
- dh-python,
- python3-setuptools,
- pandoc,
- quilt
-X-Python-Version: 2.7
-Standards-Version: 3.9.5
-Homepage: http://www.qubes-os.org
+Build-Depends: pandoc, python3-setuptools, debhelper (>= 9)
+# For the futures version of debian, delete the "compat" file, and add the line below in "Build-Depends"
+# debhelper-compat (= 12)
+Standards-Version: 4.5.0
+Homepage: https://github.com/QubesOS/qubes-app-linux-pdf-converter
 
 Package: qubes-pdf-converter
 Section: admin
 Architecture: any
-Depends:
+Depends: 
  poppler-utils,
- imagemagick,
+ libreoffice,
+ graphicsmagick,
  python3 (>= 3.7.0),
  python3-nautilus | python-nautilus,
  python3-click,
  python3-pillow,
  python3-tqdm,
+ python3-magic,
  ${misc:Depends}
 Description: The Qubes service for converting untrusted PDF files into trusted ones

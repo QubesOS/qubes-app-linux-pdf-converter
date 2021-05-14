@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# The Qubes OS Project, http://www.qubes-os.org
+# The Qubes OS Project, https://www.qubes-os.org
 #
 # Copyright (C) 2016 Marek Marczykowski-Górecki
 #                                   <marmarek@invisiblethingslab.com>
