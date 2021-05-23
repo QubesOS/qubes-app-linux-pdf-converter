@@ -1,3 +1,25 @@
+qubes-pdf-converter (2.1.12-1) unstable; urgency=medium
+
+  [ Frédéric Pierret (fepitre) ]
+  * Add .gitlab-ci.yml
+
+  [ Marek Marczykowski-Górecki ]
+  * gitlab-ci: move pylint earlier
+
+  [ Frédéric Pierret (fepitre) ]
+  * spec: add BR make
+
+  [ Rot127 ]
+  * Fix issue #5975 like @icequbes1 suggested.
+
+  [ Andrew David Wong ]
+  * Copyedit text
+
+  [ Frédéric Pierret (fepitre) ]
+  * spec: exclude unsupported CentOS
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sun, 23 May 2021 17:24:37 +0200
+
 qubes-pdf-converter (2.1.11-1) unstable; urgency=medium
 
   * rpm: add PYTHON variable to define right Python binary
