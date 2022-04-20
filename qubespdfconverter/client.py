@@ -281,7 +281,8 @@ class Representation:
         )
 
 
-    async def _dim(self, proc):
+    @staticmethod
+    async def _dim(proc):
         """Receive and compute image dimensions for initial representation
 
         :param proc: qrexec-client-vm process
