@@ -1,0 +1,11 @@
+host:
+  rpm:
+    build:
+    - rpm_spec/qpdf-converter-dom0.spec
+vm:
+  rpm:
+    build:
+    - rpm_spec/qpdf-converter.spec
+  deb:
+    build:
+    - debian
