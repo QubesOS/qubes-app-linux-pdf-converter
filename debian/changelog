@@ -1,3 +1,15 @@
+qubes-pdf-converter (2.1.13-1) unstable; urgency=medium
+
+  [ Marek Marczykowski-Górecki ]
+  * Make pylint happy
+
+  [ Frédéric Pierret (fepitre) ]
+  * Drop Travis CI
+  * Add Qubes Builder v2 integration
+  * .qubesbuilder: replace 'spec' by 'build'
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Thu, 27 Oct 2022 01:36:38 +0200
+
 qubes-pdf-converter (2.1.12-1) unstable; urgency=medium
 
   [ Frédéric Pierret (fepitre) ]
