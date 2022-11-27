@@ -12,9 +12,13 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
     machine for safe processing
     '''
 
-    def get_file_items(self, window, files):
+    def get_file_items(self, *args):
         '''Attaches context menu in Nautilus to local file objects only.
+
+        `args` will be `[files: List[Nautilus.FileInfo]]` in Nautilus 4.0 API,
+        and `[window: Gtk.Widget, files: List[Nautilus.FileInfo]]` in Nautilus 3.0 API.
         '''
+        files = args[-1]
         if not files:
             return
 
