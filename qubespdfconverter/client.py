@@ -232,6 +232,7 @@ class Representation:
         :param bar: Progress bar to update upon completion
         """
         cmd = [
+            "gm",
             "convert",
             "-size",
             f"{self.dim.width}x{self.dim.height}",

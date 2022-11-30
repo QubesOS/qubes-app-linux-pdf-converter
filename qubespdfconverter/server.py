@@ -117,6 +117,7 @@ class Representation:
     async def convert(self):
         """Convert initial representation to final representation"""
         cmd = [
+            "gm",
             "convert",
             str(self.initial),
             "-depth",
@@ -158,7 +159,7 @@ class Representation:
 
     async def _dim(self):
         """Identify image dimensions of initial representation"""
-        cmd = ["identify", "-format", "%w %h", str(self.initial)]
+        cmd = ["gm", "identify", "-format", "%w %h", str(self.initial)]
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=subprocess.PIPE
@@ -170,7 +171,7 @@ class Representation:
             await terminate_proc(proc)
             raise
 
-        return output.decode("ascii")
+        return output.decode("ascii").rstrip()
 
 
 @dataclass(frozen=True)

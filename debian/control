@@ -17,7 +17,7 @@ Section: admin
 Architecture: any
 Depends:
  poppler-utils,
- imagemagick,
+ graphicsmagick,
  python3 (>= 3.7.0),
  python3-nautilus | python-nautilus,
  python3-click,

@@ -38,7 +38,7 @@ BuildRequires: pandoc
 BuildRequires: python%{python3_pkgversion}-setuptools
 BuildRequires: python%{python3_pkgversion}-devel
 
-Requires:	poppler-utils ImageMagick
+Requires:	poppler-utils GraphicsMagick
 Requires:	nautilus-python
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow

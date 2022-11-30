@@ -59,7 +59,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         for (page_content, page_no) in zip(content, itertools.count()):
             p = self.vm.run(
                 'cat > /tmp/page{no:04}.svg && '
-                'convert /tmp/page{no:04}.svg /tmp/page{no:04}.pdf 2>&1'.format(
+                'gm convert /tmp/page{no:04}.svg /tmp/page{no:04}.pdf 2>&1'.format(
                     no=page_no), passio_popen=True)
             (stdout, _) = p.communicate(self.circle_svg.format(
                 text=page_content).encode())
