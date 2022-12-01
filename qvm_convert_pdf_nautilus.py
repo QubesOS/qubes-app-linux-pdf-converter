@@ -1,7 +1,6 @@
 import os
-import subprocess
 
-from gi.repository import Nautilus, GObject
+from gi.repository import Nautilus, GObject, GLib
 
 
 class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
@@ -57,4 +56,6 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
                 return
 
             gio_file = file_obj.get_location()
-            subprocess.call(['/usr/lib/qubes/qvm-convert-pdf.gnome', gio_file.get_path()])
+            cmd = (['/usr/lib/qubes/qvm-convert-pdf.gnome', gio_file.get_path()])
+            pid = GLib.spawn_async(cmd)[0]
+            GLib.spawn_close_pid(pid)
