@@ -1,3 +1,17 @@
+qubes-pdf-converter (2.1.15-1) unstable; urgency=medium
+
+  [ Mateusz Piórkowski ]
+  * Replace ImageMagick with GraphicsMagick
+
+  [ noskb ]
+  * qvm_convert_pdf_nautilus.py: Execute external commands
+    asynchronously
+
+  [ Marek Marczykowski-Górecki ]
+  * ci: disable R4.0
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 16 Dec 2022 14:27:18 +0100
+
 qubes-pdf-converter (2.1.14-1) unstable; urgency=medium
 
   [ noskb ]
