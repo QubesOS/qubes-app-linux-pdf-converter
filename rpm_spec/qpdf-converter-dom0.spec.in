@@ -35,6 +35,7 @@ URL:		http://www.qubes-os.org
 
 BuildRequires: make
 BuildRequires: python%{python3_pkgversion}-devel
+BuildRequires: python%{python3_pkgversion}-setuptools
 
 Source0: %{name}-%{version}.tar.gz
 
