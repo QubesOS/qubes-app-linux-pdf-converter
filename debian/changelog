@@ -1,3 +1,10 @@
+qubes-pdf-converter (2.1.16-1) unstable; urgency=medium
+
+  [ Frédéric Pierret (fepitre) ]
+  * spec: add BR python3-setuptools
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Thu, 19 Jan 2023 12:24:40 +0100
+
 qubes-pdf-converter (2.1.15-1) unstable; urgency=medium
 
   [ Mateusz Piórkowski ]
