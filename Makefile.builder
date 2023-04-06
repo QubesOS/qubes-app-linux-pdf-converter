@@ -5,6 +5,7 @@ else ifeq ($(PACKAGE_SET),vm)
   ifeq ($(filter $(DIST), stretch jessie centos7 centos8 centos-stream8 bionic xenial),)
     DEBIAN_BUILD_DIRS := debian
     RPM_SPEC_FILES := rpm_spec/qpdf-converter.spec
+    ARCH_BUILD_DIRS := archlinux
   endif
 endif
 
