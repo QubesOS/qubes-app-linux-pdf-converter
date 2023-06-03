@@ -397,6 +397,11 @@ class BaseFile:
                     Image.open,
                     Path(self.pdf.parent, f"{page}.png"))
                 )
+                for image in images:
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        image.load
+                    )
             except IOError as e:
                 for image in images:
                     await asyncio.get_running_loop().run_in_executor(
