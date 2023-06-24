@@ -9,3 +9,6 @@ vm:
   deb:
     build:
     - debian
+  archlinux:
+    build:
+    - archlinux

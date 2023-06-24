@@ -1,9 +1,9 @@
-pkgname=(qubes-pdf-converter)
-pkgver=$(cat version)
-pkgrel=1
+pkgname=qubes-pdf-converter
+pkgver=@VERSION@
+pkgrel=@REL@
 arch=(x86_64)
 pkgdesc=$(grep "Summary:" ./rpm_spec/qpdf-converter.spec.in | sed 's/Summary://' | xargs)
-url=$(git remote get-url origin)
+url="https://www.qubes-os.org/"
 license=(GPL)
 makedepends=(git pandoc python-setuptools)
 depends=(
@@ -16,12 +16,16 @@ depends=(
     python-magic
     zenity
 )
+_pkgnvr="${pkgname}-${pkgver}-${pkgrel}"
+source=("${_pkgnvr}.tar.gz")
+sha256sums=(SKIP)
 
 build() {
-    ln -s "$srcdir"/../ "$srcdir/src"
+    cd "${_pkgnvr}"
+    make
 }
 
 package() {
-    cd src
+    cd "${_pkgnvr}"
     make install-vm DESTDIR="$pkgdir/"
 }
