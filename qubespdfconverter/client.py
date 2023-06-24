@@ -503,12 +503,11 @@ class Job:
         except QrexecError:
             await cancel_task(page_task)
             raise
-        else:
-            try:
-                self.bar.reset(total=pagenums)
-            except AttributeError:
-                self.bar.total = pagenums
-                self.bar.refresh()
+        try:
+            self.bar.reset(total=pagenums)
+        except AttributeError:
+            self.bar.total = pagenums
+            self.bar.refresh()
 
         self.pdf = Path(tmpdir, self.path.with_suffix(".trusted.pdf").name)
         self.base = BaseFile(self.path, pagenums, self.pdf)
@@ -556,8 +555,7 @@ class Job:
             await send(self.proc, data)
         except BrokenPipeError as e:
             raise QrexecError("Failed to send PDF") from e
-        else:
-            self.proc.stdin.write_eof()
+        self.proc.stdin.write_eof()
 
 
     async def _pagenums(self):
