@@ -1,3 +1,14 @@
+qubes-pdf-converter (2.1.17-1) unstable; urgency=medium
+
+  [ Alexander Paetzelt ]
+  * Add archlinux package build file
+
+  [ Marek Marczykowski-Górecki ]
+  * Adjust Arch packaging for builderv2
+  * Fix issues found by pylint
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Mon, 26 Jun 2023 14:29:01 +0200
+
 qubes-pdf-converter (2.1.16-1) unstable; urgency=medium
 
   [ Frédéric Pierret (fepitre) ]
