@@ -12,3 +12,7 @@ vm:
   archlinux:
     build:
     - archlinux
+
+vm-centos-stream8:
+  rpm:
+    build: []
