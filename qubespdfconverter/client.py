@@ -392,10 +392,15 @@ class BaseFile:
 
         for page in pages:
             try:
-                images.append(await asyncio.get_running_loop().run_in_executor(
+                image = await asyncio.get_running_loop().run_in_executor(
                     None,
                     Image.open,
-                    Path(self.pdf.parent, f"{page}.png"))
+                    Path(self.pdf.parent, f"{page}.png")
+                )
+                images.append(image)
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    image.load
                 )
             except IOError as e:
                 for image in images:
