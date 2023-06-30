@@ -1,3 +1,14 @@
+qubes-pdf-converter (2.1.18-1) unstable; urgency=medium
+
+  [ Marek Marczykowski-Górecki ]
+  * Do not build for Centos Stream 8
+
+  [ tungsten987 ]
+  * Update client.py
+  * Update client.py
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 30 Jun 2023 16:01:49 +0200
+
 qubes-pdf-converter (2.1.17-1) unstable; urgency=medium
 
   [ Alexander Paetzelt ]
