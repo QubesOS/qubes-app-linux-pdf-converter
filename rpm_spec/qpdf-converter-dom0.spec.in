@@ -47,14 +47,22 @@ Qubes policy for qpdf-converter
 
 %install
 rm -rf $RPM_BUILD_ROOT
+%if 0%{?fedora} <= 32
 install -D -m 0664 qubes.PdfConvert.policy $RPM_BUILD_ROOT/etc/qubes-rpc/policy/qubes.PdfConvert
+%else
+install -D -m 0664 90-default-pdf-convert.policy $RPM_BUILD_ROOT/etc/qubes/policy.d/90-default-pdf-convert.policy
+%endif
 make install-dom0 DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
+%if 0%{?fedora} <= 32
 %config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.PdfConvert
+%else
+%config %attr(0664,root,qubes) /etc/qubes/policy.d/90-default-pdf-convert.policy
+%endif
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info
 %{python3_sitelib}/qubespdfconverter-*.egg-info/*
 %{python3_sitelib}/qubespdfconverter
