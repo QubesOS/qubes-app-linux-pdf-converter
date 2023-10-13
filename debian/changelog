@@ -1,3 +1,9 @@
+qubes-pdf-converter (2.1.19-1) unstable; urgency=medium
+
+  * Migrate to new policy format
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Fri, 13 Oct 2023 02:49:16 +0200
+
 qubes-pdf-converter (2.1.18-1) unstable; urgency=medium
 
   [ Marek Marczykowski-Górecki ]
