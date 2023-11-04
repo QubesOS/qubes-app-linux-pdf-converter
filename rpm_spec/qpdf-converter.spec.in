@@ -37,9 +37,18 @@ BuildRequires: make
 BuildRequires: pandoc 
 BuildRequires: python%{python3_pkgversion}-setuptools
 BuildRequires: python%{python3_pkgversion}-devel
+%if 0%{?is_opensuse}
+# for directory ownership
+BuildRequires: python-nautilus-common-files
+BuildRequires: qubes-core-qrexec
+%endif
 
 Requires:	poppler-utils GraphicsMagick
+%if 0%{?is_opensuse}
+Requires:	python-nautilus-common-files
+%else
 Requires:	nautilus-python
+%endif
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
