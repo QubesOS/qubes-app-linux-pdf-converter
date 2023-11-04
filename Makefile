@@ -24,14 +24,20 @@ PYTHON ?= python3
 build:
 	make manpages -C doc
 
-install-vm:
+install-vm: install-service install-gnome install-kde4
+
+install-service:
 	make install -C doc
 	$(PYTHON) setup.py install -O1 $(PYTHON_PREFIX_ARG) --root $(DESTDIR)
 	install -d $(DESTDIR)/etc/qubes-rpc
 	ln -s ../../usr/lib/qubes/qpdf-convert-server $(DESTDIR)/etc/qubes-rpc/qubes.PdfConvert
 	install -D qvm-convert-pdf.gnome $(DESTDIR)/usr/lib/qubes/qvm-convert-pdf.gnome
+
+install-gnome:
 	install -d $(DESTDIR)/usr/share/nautilus-python/extensions
 	install -m 0644 qvm_convert_pdf_nautilus.py $(DESTDIR)/usr/share/nautilus-python/extensions
+
+install-kde4:
 	install -d $(DESTDIR)/usr/share/kde4/services
 	install -m 0644 qvm-convert-pdf.desktop $(DESTDIR)/usr/share/kde4/services
 
