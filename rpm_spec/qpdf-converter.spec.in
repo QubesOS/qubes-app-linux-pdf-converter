@@ -37,9 +37,18 @@ BuildRequires: make
 BuildRequires: pandoc 
 BuildRequires: python%{python3_pkgversion}-setuptools
 BuildRequires: python%{python3_pkgversion}-devel
+%if 0%{?is_opensuse}
+# for directory ownership
+BuildRequires: python-nautilus-common-files
+BuildRequires: qubes-core-qrexec
+%endif
 
 Requires:	poppler-utils GraphicsMagick
+%if 0%{?is_opensuse}
+Requires:	python-nautilus-common-files
+%else
 Requires:	nautilus-python
+%endif
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
@@ -55,7 +64,11 @@ The Qubes service for converting untrusted PDF files into trusted ones.
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-vm DESTDIR=$RPM_BUILD_ROOT PYTHON=%{__python3}
+make install-service DESTDIR=$RPM_BUILD_ROOT PYTHON=%{__python3}
+make install-gnome DESTDIR=$RPM_BUILD_ROOT PYTHON=%{__python3}
+%if !0%{?is_opensuse}
+make install-kde4 DESTDIR=$RPM_BUILD_ROOT PYTHON=%{__python3}
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -67,7 +80,9 @@ rm -rf $RPM_BUILD_ROOT
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
+%if !0%{?is_opensuse}
 /usr/share/kde4/services/qvm-convert-pdf.desktop
+%endif
 %{_mandir}/man1/qvm-convert-pdf.1*
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info
 %{python3_sitelib}/qubespdfconverter-*.egg-info/*
