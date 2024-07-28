@@ -42,6 +42,7 @@ MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
 DEPTH = 8
+RESOLUTION = 300
 
 ERROR_LOGS = asyncio.Queue()
 
@@ -314,6 +315,8 @@ class BaseFile:
     :param pdf: Path to temporary final PDf
     """
 
+    output_resolution: int = RESOLUTION
+
     def __init__(self, path, pagenums, pdf):
         """
         :param path: @path
@@ -416,7 +419,7 @@ class BaseFile:
                 functools.partial(images[0].save,
                                   self.pdf,
                                   "PDF",
-                                  resolution=100,
+                                  resolution=self.output_resolution,
                                   append=self.pdf.exists(),
                                   append_images=images[1:],
                                   save_all=True)
@@ -457,7 +460,6 @@ class Job:
         self.base = None
         self.proc = None
         self.pdf = None
-
 
     async def run(self, archive, depth, in_place):
         self.proc = await asyncio.create_subprocess_exec(
@@ -585,6 +587,8 @@ class Job:
 
 
 async def run(params):
+    CLIENT_VM_CMD[-1] += "+" + str(params["resolution"])
+    BaseFile.output_resolution = params["resolution"]
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
 
@@ -651,6 +655,15 @@ async def run(params):
     "--in-place",
     is_flag=True,
     help="Replace original files instead of archiving them"
+)
+@click.option(
+    "-r",
+    "--resolution",
+    type=click.IntRange(75, 4800),
+    nargs=1,
+    default=RESOLUTION,
+    metavar='RESOLUTION',
+    help="Resolution of output. default is 300 ppi"
 )
 @click.argument(
     "files",
