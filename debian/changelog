@@ -1,3 +1,11 @@
+qubes-pdf-converter (2.1.20-1) unstable; urgency=medium
+
+  * rpm: do not install kde4 files on openSUSE
+  * rpm: add BR required for directory ownership
+  * rpm: mark packages as noarch
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Mon, 12 Aug 2024 17:38:43 +0200
+
 qubes-pdf-converter (2.1.19-1) unstable; urgency=medium
 
   * Migrate to new policy format
