@@ -75,7 +75,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
-        self.assertEquals(p.returncode, 0,
+        self.assertEqual(p.returncode, 0,
             "Failed to get pdfinfo of {}".format(filename))
         pdfinfo = {}
         for line in stdout.decode().splitlines():
@@ -84,7 +84,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         return pdfinfo
 
     def assertCorrectlyTransformed(self, orig_filename, trusted_filename):
-        self.assertEquals(
+        self.assertEqual(
             self.vm.run('test -r "{}"'.format(trusted_filename), wait=True), 0)
         # TODO: somehow verify content of generated file, for now perform
         # some heuristics
@@ -95,9 +95,9 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
 
         untrusted_backup = 'QubesUntrustedPDFs/{}'.format(os.path.basename(
             trusted_filename.replace('.trusted', '')))
-        self.assertEquals(
+        self.assertEqual(
             self.vm.run('test -r "{}"'.format(untrusted_backup), wait=True), 0)
-        self.assertEquals(self.vm.run(
+        self.assertEqual(self.vm.run(
             'diff "{}" "{}"'.format(orig_filename, untrusted_backup), wait=True), 0)
 
     def test_000_one_page(self):
@@ -105,7 +105,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         p = self.vm.run('cp test.pdf orig.pdf; qvm-convert-pdf test.pdf 2>&1',
             passio_popen=True)
         (stdout, _) = p.communicate()
-        self.assertEquals(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
+        self.assertEqual(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
         self.assertCorrectlyTransformed('orig.pdf', 'test.trusted.pdf')
 
     def test_001_two_pages(self):
@@ -113,7 +113,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         p = self.vm.run('cp test.pdf orig.pdf; qvm-convert-pdf test.pdf 2>&1',
             passio_popen=True)
         (stdout, _) = p.communicate()
-        self.assertEquals(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
+        self.assertEqual(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
         self.assertCorrectlyTransformed('orig.pdf', 'test.trusted.pdf')
 
     def test_002_500_pages(self):
@@ -121,7 +121,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         p = self.vm.run('cp test.pdf orig.pdf; qvm-convert-pdf test.pdf 2>&1',
             passio_popen=True)
         (stdout, _) = p.communicate()
-        self.assertEquals(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
+        self.assertEqual(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
         self.assertCorrectlyTransformed('orig.pdf', 'test.trusted.pdf')
 
     def test_003_filename_with_spaces(self):
@@ -131,7 +131,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
             'qvm-convert-pdf "test with spaces.pdf" 2>&1',
             passio_popen=True)
         (stdout, _) = p.communicate()
-        self.assertEquals(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
+        self.assertEqual(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
         self.assertCorrectlyTransformed('orig.pdf',
             'test with spaces.trusted.pdf')
 
