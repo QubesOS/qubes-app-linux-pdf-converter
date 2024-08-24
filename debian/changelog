@@ -1,3 +1,9 @@
+qubes-pdf-converter (2.1.21-1) unstable; urgency=medium
+
+  * tests: assertEquals -> assertEqual
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Sat, 24 Aug 2024 02:44:33 +0200
+
 qubes-pdf-converter (2.1.20-1) unstable; urgency=medium
 
   * rpm: do not install kde4 files on openSUSE
