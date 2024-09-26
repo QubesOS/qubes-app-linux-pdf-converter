@@ -8,7 +8,31 @@ qvm-convert-pdf - converts potentially untrusted PDFs to a safe-to-view PDF
 
 SYNOPSIS
 ========
-| qvm-convert-pdf <PDF to convert ...>
+:command: `qvm-convert-pdf` [-h] [--batch SIZE] [--archive PATH] [--in-place]
+                            [--resolution RESOLUTION]
+
+OPTIONS
+=======
+
+.. option:: --help, -h
+
+   Show help message and exit
+
+.. option:: --batch=SIZE, -b SIZE
+
+   Maximum number of conversion tasks [x>=1]
+
+.. option:: --archive=PATH, -a PATH
+
+   Directory for storing archived files
+
+.. option:: --in-place, -i
+
+   Replace original files instead of archiving them
+
+.. option:: --resolution=RESOLUTION, -r RESOLUTION
+
+   Output resolution. default is 300 ppi [75<=x<=4800]
 
 DESCRIPTION
 ===========

@@ -20,6 +20,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import argparse
 import asyncio
 import subprocess
 import sys
@@ -30,6 +31,8 @@ from tempfile import TemporaryDirectory
 
 DEPTH = 8
 STDIN_READ_SIZE = 65536
+# Default resolution in ppi (pixel per inch)
+RESOLUTION = 300
 
 
 def unlink(path):
@@ -145,6 +148,8 @@ class Representation:
             "pdftocairo",
             str(self.path),
             "-png",
+            "-r",
+            args.resolution,
             "-f",
             str(self.page),
             "-l",
@@ -270,6 +275,16 @@ class BaseFile:
 
             self.batch.task_done()
 
+parser = argparse.ArgumentParser(
+        prog="qubes.PdfConvert",
+        description="Server side of qvm-convert-pdf",
+        epilog="Refer to qvm-convert-pdf(1) manual for more information")
+
+parser.add_argument('resolution', nargs='?',
+                    default=str(RESOLUTION),
+                    help='Default resolution is 300 ppi')
+
+args = parser.parse_args()
 
 def main():
     try:
