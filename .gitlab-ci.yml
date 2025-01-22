@@ -1,5 +1,6 @@
 checks:pylint:
   before_script:
+  - sudo dnf install -y python3-pip python3-pylint
   - pip3 install --quiet -r ci/requirements.txt
   script:
   - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
