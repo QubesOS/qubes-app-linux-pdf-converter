@@ -9,12 +9,14 @@ makedepends=(git pandoc python-setuptools)
 depends=(
     graphicsmagick
     poppler
-    python-nautilus
     python-click
     python-pillow
     python-tqdm
     python-magic
     zenity
+)
+optdepends=(
+    python-nautilus
 )
 _pkgnvr="${pkgname}-${pkgver}-${pkgrel}"
 source=("${_pkgnvr}.tar.gz")
