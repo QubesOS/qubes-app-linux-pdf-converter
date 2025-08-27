@@ -677,8 +677,7 @@ def main(**params):
     logging.basicConfig(format="error: %(message)s")
 
     if params["files"]:
-        loop = asyncio.get_event_loop()
-        sys.exit(loop.run_until_complete(run(params)))
+        sys.exit(asyncio.run(run(params)))
     else:
         print("No files to sanitize.")
 

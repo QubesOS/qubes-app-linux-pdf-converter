@@ -297,9 +297,8 @@ def main():
         pdf_path.write_bytes(data)
         base = BaseFile(pdf_path)
 
-        loop = asyncio.get_event_loop()
         try:
-            loop.run_until_complete(base.sanitize())
+            asyncio.run(base.sanitize())
         except subprocess.CalledProcessError:
             sys.exit(1)
 
