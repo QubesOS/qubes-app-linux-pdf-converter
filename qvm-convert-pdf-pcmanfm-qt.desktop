@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Action
+Name=Convert PDF in disposable qube
+Icon=gtk-convert
+Profiles=on_pdf;
+
+[X-Action-Profile on_pdf]
+MimeTypes=application/pdf
+Exec=/usr/lib/qubes/qvm-actions.sh pdf %F
