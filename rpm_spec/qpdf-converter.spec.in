@@ -54,6 +54,7 @@ Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
 Requires:	python%{python3_pkgversion}-tqdm
+Recommends:	zenity
 
 Source0: %{name}-%{version}.tar.gz
 
