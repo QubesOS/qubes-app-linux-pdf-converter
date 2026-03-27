@@ -491,11 +491,13 @@ class Job:
 
                 self.bar.set_job_status(Status.FAIL)
                 await ERROR_LOGS.put(f"{self.path.name}: {e}")
-                if self.proc.returncode is not None:
+                if self.proc.returncode is None:
                     await terminate_proc(self.proc)
                 raise
             except asyncio.CancelledError:
                 self.bar.set_job_status(Status.CANCELLED)
+                if self.proc.returncode is None:
+                    await terminate_proc(self.proc)
                 raise
 
         self.bar.set_job_status(Status.DONE)
@@ -599,10 +601,12 @@ async def run(params):
                                                  params["batch"],
                                                  params["in_place"])))
 
-    asyncio.get_running_loop().add_signal_handler(
-        signal.SIGINT,
-        lambda: asyncio.ensure_future(sigint_handler(tasks))
-    )
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(
+            sig,
+            lambda: asyncio.ensure_future(sigint_handler(tasks))
+        )
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
     completed = results.count(None)

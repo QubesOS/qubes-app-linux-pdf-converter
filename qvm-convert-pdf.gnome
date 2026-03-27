@@ -20,10 +20,29 @@
 #
 #
 
+set -u
+
 if [ $# -ne 1 ]; then
 exit 1
 fi
 
 export PROGRESS_FOR_GUI="yes"
 
-/usr/bin/qvm-convert-pdf "$@" | zenity --progress --text="Converting PDF using Disposable VM..." --auto-close --auto-kill
+fifo="$(mktemp -u)"
+mkfifo "$fifo" || exit 1
+
+/usr/bin/qvm-convert-pdf "$@" >"$fifo" &
+converter_pid="$!"
+
+zenity --progress --text="Converting PDF using Disposable VM..." --auto-close <"$fifo"
+zenity_rc="$?"
+
+rm -f -- "$fifo"
+
+if [ "$zenity_rc" -ne 0 ]; then
+    kill "$converter_pid"
+    wait "$converter_pid"
+    exit 1
+fi
+
+wait "$converter_pid"
