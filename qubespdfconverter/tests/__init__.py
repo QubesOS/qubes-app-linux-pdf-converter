@@ -20,6 +20,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
+import asyncio
 import os
 import unittest
 
@@ -134,6 +135,34 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         self.assertEqual(p.returncode, 0, 'qvm-convert-pdf failed: {}'.format(stdout))
         self.assertCorrectlyTransformed('orig.pdf',
             'test with spaces.trusted.pdf')
+
+    def test_004_cancel_stops_conversion(self):
+        self.create_pdf('test.pdf', ['This is test'] * 500)
+        domains_before = set(self.app.domains)
+        p = self.vm.run(
+            'cp test.pdf orig.pdf; '
+            'timeout --signal=INT 20 qvm-convert-pdf test.pdf 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertNotEqual(p.returncode, 0,
+            'Expected non-zero exit from interrupted conversion: {}'.format(stdout))
+        self.assertNotEqual(
+            self.vm.run('test -r test.trusted.pdf', wait=True), 0,
+            'trusted pdf should not exist after cancel')
+        # DispVM cleanup in dom0 is asynchronous; poll until the DispVM
+        # disappears from self.app.domains (mirrors qubes-core-admin pattern),
+        # up to 10 seconds.
+        timeout = 10
+        while True:
+            domains_after = set(self.app.domains)
+            if domains_after == domains_before:
+                break
+            self.loop.run_until_complete(asyncio.sleep(1))
+            timeout -= 1
+            if timeout <= 0:
+                self.fail(
+                    'DispVM not cleaned up 10s after cancel: {}'.format(
+                        domains_after - domains_before))
 
 
 def list_tests():
