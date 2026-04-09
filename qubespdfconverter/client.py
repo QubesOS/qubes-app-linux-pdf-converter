@@ -24,6 +24,7 @@ import asyncio
 import click
 import functools
 import logging
+import os
 import shutil
 import signal
 import subprocess
@@ -187,6 +188,46 @@ async def recvline(proc):
         raise EOFError
 
     return untrusted_data.decode("ascii").rstrip()
+
+
+def is_pdf_password_protected(path):
+    """Lightweight encrypted-PDF detection based on byte signatures.
+
+    This avoids running full PDF parsers on the client side. It scans only
+    small chunks from the beginning and end of the file.
+    """
+    try:
+        with path.open("rb") as f:
+            head = f.read(64 * 1024)
+            if b"%PDF-" not in head[:1024]:
+                return False
+
+            f.seek(0, 2)
+            size = f.tell()
+            tail_size = min(size, 64 * 1024)
+            f.seek(max(0, size - tail_size))
+            tail = f.read(tail_size)
+    except OSError:
+        return False
+
+    # Encrypted PDFs contain an Encrypt dictionary reference in trailer/xref.
+    return b"/Encrypt" in head or b"/Encrypt" in tail
+
+
+def prompt_password_zenity(path):
+    """Prompt for password using zenity.
+
+    Returns password as string or None if prompt was canceled/failed.
+    """
+    cmd = [
+        "zenity",
+        "--password",
+        f"--title=Convert protected PDF: {path.name}",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, check=False)
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.decode("utf-8", errors="ignore").rstrip("\n")
 
 
 class Tqdm(tqdm.tqdm):
@@ -445,7 +486,7 @@ class Job:
     :param pos: Bar position
     """
 
-    def __init__(self, path, pos):
+    def __init__(self, path, pos, password=""):
         """
 
         :param file: Base file
@@ -454,6 +495,7 @@ class Job:
         :param pdf: Path to temporary PDF for appending representations
         """
         self.path = path
+        self.password = password
         self.bar = Tqdm(desc=f"{path}...0/?",
                         bar_format=" {desc}",
                         position=pos)
@@ -528,6 +570,9 @@ class Job:
         )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
+        if self.password:
+            await self._reencrypt()
+
         await asyncio.get_running_loop().run_in_executor(
             None,
             shutil.move,
@@ -551,6 +596,25 @@ class Job:
             )
 
 
+    async def _reencrypt(self):
+        """Re-encrypt the trusted PDF with the original password using qpdf"""
+        encrypted = self.pdf.with_suffix(".enc.pdf")
+        cmd = [
+            "qpdf",
+            "--encrypt", self.password, self.password, "256", "--",
+            str(self.pdf),
+            str(encrypted),
+        ]
+        proc = await asyncio.create_subprocess_exec(*cmd)
+        try:
+            await wait_proc(proc, cmd)
+        except subprocess.CalledProcessError as e:
+            raise RepresentationError("Failed to re-encrypt PDF") from e
+        await asyncio.get_running_loop().run_in_executor(
+            None, encrypted.replace, self.pdf
+        )
+
+
     async def _send(self):
         """Send original document to server"""
         data = await asyncio.get_running_loop().run_in_executor(
@@ -559,6 +623,8 @@ class Job:
         )
 
         try:
+            if self.password:
+                await send(self.proc, f"--password={self.password}\n")
             await send(self.proc, data)
         except BrokenPipeError as e:
             raise QrexecError("Failed to send PDF") from e
@@ -586,18 +652,48 @@ class Job:
         self.path.rename(Path(archive, self.path.name))
 
 
+async def collect_jobs(params):
+    """Build Job list and launch their tasks.
+
+    Resolves per-file passwords (prompting via zenity in GUI mode for
+    encrypted PDFs), skips files whose prompt was cancelled, then
+    creates and starts one asyncio Task per Job.
+
+    Returns (jobs, tasks, skipped_count).
+    """
+    passwords = {path: params["password"] for path in params["files"]}
+    skipped_files = set()
+    gui_mode = os.environ.get("PROGRESS_FOR_GUI") == "yes"
+    if gui_mode and not params["password"]:
+        for path in params["files"]:
+            if is_pdf_password_protected(path):
+                password = prompt_password_zenity(path)
+                if password is None:
+                    await ERROR_LOGS.put(
+                        f"{path.name}: Password prompt canceled"
+                    )
+                    skipped_files.add(path)
+                    continue
+                passwords[path] = password
+
+    selected_files = [path for path in params["files"] if path not in skipped_files]
+    jobs = [Job(f, i, passwords[f]) for i, f in enumerate(selected_files)]
+    tasks = [
+        asyncio.create_task(job.run(params["archive"],
+                                    params["batch"],
+                                    params["in_place"]))
+        for job in jobs
+    ]
+    return jobs, tasks, len(skipped_files)
+
+
 async def run(params):
     CLIENT_VM_CMD[-1] += "+" + str(params["resolution"])
     BaseFile.output_resolution = params["resolution"]
     suffix = "s" if len(params["files"]) > 1 else ""
     print(f"Sending file{suffix} to Disposable VM{suffix}...\n")
 
-    tasks = []
-    jobs = [Job(f, i) for i, f in enumerate(params["files"])]
-    for job in jobs:
-        tasks.append(asyncio.create_task(job.run(params["archive"],
-                                                 params["batch"],
-                                                 params["in_place"])))
+    jobs, tasks, num_skipped = await collect_jobs(params)
 
     asyncio.get_running_loop().add_signal_handler(
         signal.SIGINT,
@@ -628,9 +724,10 @@ async def run(params):
             logging.error(err_msg)
             ERROR_LOGS.task_done()
 
-    print(f"{newlines}Total Sanitized Files:  {completed}/{len(results)}")
+    total = len(results) + num_skipped
+    print(f"{newlines}Total Sanitized Files:  {completed}/{total}")
 
-    return completed != len(results)
+    return completed != total
 
 
 @click.command()
@@ -664,6 +761,13 @@ async def run(params):
     default=RESOLUTION,
     metavar='RESOLUTION',
     help="Resolution of output. default is 300 ppi"
+)
+@click.option(
+    "-p",
+    "--password",
+    default="",
+    metavar="PASSWORD",
+    help="Password for encrypted PDF files"
 )
 @click.argument(
     "files",
