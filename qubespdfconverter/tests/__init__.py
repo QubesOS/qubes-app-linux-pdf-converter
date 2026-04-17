@@ -149,10 +149,10 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         self.assertNotEqual(
             self.vm.run('test -r test.trusted.pdf', wait=True), 0,
             'trusted pdf should not exist after cancel')
-        # DispVM cleanup in dom0 is asynchronous; poll until the DispVM
-        # disappears from self.app.domains (mirrors qubes-core-admin pattern),
-        # up to 10 seconds.
-        timeout = 10
+        # DispVM cleanup is asynchronous; poll until it disappears from the
+        # collection. The timeout must be shorter than the conversion time, to
+        # be sure it was canceled.
+        timeout = 20
         while True:
             domains_after = set(self.app.domains)
             if domains_after == domains_before:
