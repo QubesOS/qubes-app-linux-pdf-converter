@@ -117,7 +117,7 @@ class Representation:
         self.dim = None
 
 
-    async def convert(self):
+    async def convert(self, password=b""):
         """Convert initial representation to final representation"""
         cmd = [
             "gm",
@@ -128,7 +128,7 @@ class Representation:
             f"rgb:{self.final}"
         ]
 
-        await self.create_irep()
+        await self.create_irep(password)
         self.dim = await self._dim()
 
         proc = await asyncio.create_subprocess_exec(*cmd)
@@ -142,10 +142,14 @@ class Representation:
             )
 
 
-    async def create_irep(self):
+    async def create_irep(self, password=b""):
         """Create initial representation"""
-        cmd = [
-            "pdftocairo",
+        cmd = ["pdftocairo"]
+
+        if password:
+            cmd += ["-opw", password.decode(), "-upw", password.decode()]
+
+        cmd += [
             str(self.path),
             "-png",
             "-r",
@@ -187,8 +191,9 @@ class BatchEntry:
 
 class BaseFile:
     """Unsanitized file"""
-    def __init__(self, path):
+    def __init__(self, path, password=b""):
         self.path = path
+        self.password = password
         self.pagenums = 0
         self.batch = None
 
@@ -218,7 +223,12 @@ class BaseFile:
 
     def _pagenums(self):
         """Return the number of pages in the suspect file"""
-        cmd = ["pdfinfo", str(self.path)]
+        cmd = ["pdfinfo"]
+
+        if self.password:
+            cmd += ["-opw", self.password.decode(), "-upw", self.password.decode()]
+
+        cmd.append(str(self.path))
         output = subprocess.run(cmd, capture_output=True, check=True)
         pages = 0
 
@@ -238,7 +248,7 @@ class BaseFile:
                 "png",
                 "rgb"
             )
-            task = asyncio.create_task(rep.convert())
+            task = asyncio.create_task(rep.convert(self.password))
             batch_e = BatchEntry(task, rep)
             await self.batch.join()
 
@@ -287,15 +297,28 @@ parser.add_argument('resolution', nargs='?',
 args = parser.parse_args()
 
 def main():
+    first_line = sys.stdin.buffer.readline()
+
+    # Password is optional. New clients with a password send
+    # "--password=<password>\n" as the first line. Old clients and new
+    # clients without a password send the PDF bytes directly, so the
+    # first line is part of the PDF data.
+    if first_line.startswith(b"--password="):
+        password = first_line[len(b"--password="):].rstrip(b"\n")
+        prefix = b""
+    else:
+        password = b""
+        prefix = first_line
+
     try:
-        data = recv_b()
+        data = prefix + recv_b()
     except EOFError:
         sys.exit(1)
 
     with TemporaryDirectory(prefix="qvm-sanitize") as tmpdir:
         pdf_path = Path(tmpdir, "original")
         pdf_path.write_bytes(data)
-        base = BaseFile(pdf_path)
+        base = BaseFile(pdf_path, password)
 
         try:
             asyncio.run(base.sanitize())

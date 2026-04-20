@@ -9,7 +9,7 @@ qvm-convert-pdf - converts potentially untrusted PDFs to a safe-to-view PDF
 SYNOPSIS
 ========
 :command: `qvm-convert-pdf` [-h] [--batch SIZE] [--archive PATH] [--in-place]
-                            [--resolution RESOLUTION]
+                            [--resolution RESOLUTION] [--password PASSWORD]
 
 OPTIONS
 =======
@@ -33,6 +33,10 @@ OPTIONS
 .. option:: --resolution=RESOLUTION, -r RESOLUTION
 
    Output resolution. default is 300 ppi [75<=x<=4800]
+
+.. option:: --password=PASSWORD, -p PASSWORD
+
+   Password to use for encrypted PDF files.
 
 DESCRIPTION
 ===========
