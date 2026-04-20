@@ -1,3 +1,17 @@
+qubes-pdf-converter (2.1.26-1) unstable; urgency=medium
+
+  [ Jayant-Kernel ]
+  * pdf-converter: stop DispVM conversion when GUI cancel is clicked
+  * packaging: recommend zenity for GUI cancel support
+  * tests: add cancel integration test and unit tests for signal
+    handling
+  * pdf-converter: support password-protected PDFs
+
+  [ Ben Grande ]
+  * Increase test timeout to check for DispVM absence
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Mon, 20 Apr 2026 02:51:26 +0200
+
 qubes-pdf-converter (2.1.25-1) unstable; urgency=medium
 
   [ Aaron Rainbolt ]
