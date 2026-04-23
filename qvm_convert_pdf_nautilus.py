@@ -21,17 +21,15 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
         if not files:
             return
 
-        # TODO:  Only allow pdf files
         for file_obj in files:
 
-            # Do not attach context menu to a directory
-            if file_obj.is_directory():
-                return
-
-            # Do not attach context menu  to anything other that a file
             # local files only; not remote
             if file_obj.get_uri_scheme() != 'file':
                 return
+
+            # Allow directories (they will be expanded by qvm-convert-pdf)
+            if file_obj.is_directory():
+                continue
 
             # Only attach context menu to pdf files
             filename, ext = os.path.splitext(file_obj.get_name())
@@ -47,15 +45,20 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
         return menu_item,
 
     def on_menu_item_clicked(self, menu, files):
-        '''Called when user chooses files though Nautilus context menu.
+        '''Called when user chooses files through Nautilus context menu.
+
+        Collects all selected PDF files and directories into a single
+        qvm-convert-pdf.gnome invocation so one progress window is shown.
         '''
+        paths = []
         for file_obj in files:
-
-            # Check if file still exists
             if file_obj.is_gone():
-                return
+                continue
+            paths.append(file_obj.get_location().get_path())
 
-            gio_file = file_obj.get_location()
-            cmd = (['/usr/lib/qubes/qvm-convert-pdf.gnome', gio_file.get_path()])
-            pid = GLib.spawn_async(cmd)[0]
-            GLib.spawn_close_pid(pid)
+        if not paths:
+            return
+
+        cmd = ['/usr/lib/qubes/qvm-convert-pdf.gnome'] + paths
+        pid = GLib.spawn_async(cmd)[0]
+        GLib.spawn_close_pid(pid)
