@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from qubespdfconverter.server import BaseFile, Representation
+from qubespdfconverter.server import BaseFile, PdfRenderer
 
 
 class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
@@ -48,12 +48,12 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("-opw", cmd)
             self.assertNotIn("-upw", cmd)
 
-    async def test_create_irep_includes_password_flags(self):
+    async def test_create_page_image_includes_password_flags(self):
         """pdftocairo receives -opw/-upw when a password is provided."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir, "original.pdf")
             path.touch()
-            rep = Representation(path, Path(tmpdir, "1"), "png", "rgb")
+            renderer = PdfRenderer(path, password=b"secret")
 
             mock_proc = mock.AsyncMock()
             mock_proc.returncode = 0
@@ -63,19 +63,19 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
                 "asyncio.create_subprocess_exec",
                 return_value=mock_proc
             ) as exec_mock:
-                await rep.create_irep(password=b"secret")
+                await renderer.create_page_image(1, Path(tmpdir, "1.png"))
 
             cmd = exec_mock.call_args[0]
             self.assertIn("-opw", cmd)
             self.assertIn("-upw", cmd)
             self.assertIn("secret", cmd)
 
-    async def test_create_irep_omits_password_flags_when_empty(self):
+    async def test_create_page_image_omits_password_flags_when_empty(self):
         """pdftocairo does not receive password flags when password is empty."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir, "original.pdf")
             path.touch()
-            rep = Representation(path, Path(tmpdir, "1"), "png", "rgb")
+            renderer = PdfRenderer(path, password=b"")
 
             mock_proc = mock.AsyncMock()
             mock_proc.returncode = 0
@@ -85,7 +85,7 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
                 "asyncio.create_subprocess_exec",
                 return_value=mock_proc
             ) as exec_mock:
-                await rep.create_irep(password=b"")
+                await renderer.create_page_image(1, Path(tmpdir, "1.png"))
 
             cmd = exec_mock.call_args[0]
             self.assertNotIn("-opw", cmd)
