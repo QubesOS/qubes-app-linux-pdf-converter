@@ -90,6 +90,62 @@ def recv_b():
     return untrusted_data
 
 
+class PdfRenderer:
+    """Render PDF pages into image representations."""
+
+    def __init__(self, path, password=b"", resolution=RESOLUTION):
+        self.path = path
+        self.password = password
+        self.resolution = str(resolution)
+
+
+    def _password_args(self):
+        if not self.password:
+            return []
+        password = self.password.decode()
+        return ["-opw", password, "-upw", password]
+
+
+    def page_count(self):
+        """Return the number of pages in the PDF."""
+        cmd = ["pdfinfo"] + self._password_args() + [str(self.path)]
+        output = subprocess.run(cmd, capture_output=True, check=True)
+        pages = 0
+
+        for line in output.stdout.decode().splitlines():
+            if "Pages:" in line:
+                pages = int(line.split(":")[1])
+
+        return pages
+
+
+    async def create_page_image(self, page, output):
+        """Render one PDF page into an image."""
+        cmd = ["pdftocairo"] + self._password_args()
+        cmd += [
+            str(self.path),
+            "-png",
+            "-r",
+            self.resolution,
+            "-f",
+            str(page),
+            "-l",
+            str(page),
+            "-singlefile",
+            str(Path(output.parent, output.stem))
+        ]
+
+        proc = await asyncio.create_subprocess_exec(*cmd)
+        await wait_proc(proc, cmd)
+
+
+    async def render_page(self, page, prefix):
+        """Create an intermediate page representation."""
+        rep = Representation(prefix, "png", "rgb")
+        await self.create_page_image(page, rep.initial)
+        return rep
+
+
 class Representation:
     """Umbrella object for a file's initial and final representations
 
@@ -103,21 +159,19 @@ class Representation:
     from the final representation upon conversion. Generally, this makes the
     final representation a relatively simple format (e.g., RGB bitmap).
 
-    :param path: Path to original, unsanitized file
     :param prefix: Path prefix for representations
     :param f_suffix: File extension of initial representation (without .)
     :param i_suffix: File extension of final representation (without .)
     """
 
-    def __init__(self, path, prefix, i_suffix, f_suffix):
-        self.path = path
+    def __init__(self, prefix, i_suffix, f_suffix):
         self.page = prefix.name
         self.initial = prefix.with_suffix(f".{i_suffix}")
         self.final = prefix.with_suffix(f".{f_suffix}")
         self.dim = None
 
 
-    async def convert(self, password=b""):
+    async def convert(self):
         """Convert initial representation to final representation"""
         cmd = [
             "gm",
@@ -128,7 +182,6 @@ class Representation:
             f"rgb:{self.final}"
         ]
 
-        await self.create_irep(password)
         self.dim = await self._dim()
 
         proc = await asyncio.create_subprocess_exec(*cmd)
@@ -140,30 +193,6 @@ class Representation:
                 unlink,
                 self.initial
             )
-
-
-    async def create_irep(self, password=b""):
-        """Create initial representation"""
-        cmd = ["pdftocairo"]
-
-        if password:
-            cmd += ["-opw", password.decode(), "-upw", password.decode()]
-
-        cmd += [
-            str(self.path),
-            "-png",
-            "-r",
-            args.resolution,
-            "-f",
-            str(self.page),
-            "-l",
-            str(self.page),
-            "-singlefile",
-            str(Path(self.initial.parent, self.initial.stem))
-        ]
-
-        proc = await asyncio.create_subprocess_exec(*cmd)
-        await wait_proc(proc, cmd)
 
 
     async def _dim(self):
@@ -194,6 +223,7 @@ class BaseFile:
     def __init__(self, path, password=b""):
         self.path = path
         self.password = password
+        self.renderer = PdfRenderer(path, password, args.resolution)
         self.pagenums = 0
         self.batch = None
 
@@ -223,32 +253,17 @@ class BaseFile:
 
     def _pagenums(self):
         """Return the number of pages in the suspect file"""
-        cmd = ["pdfinfo"]
-
-        if self.password:
-            cmd += ["-opw", self.password.decode(), "-upw", self.password.decode()]
-
-        cmd.append(str(self.path))
-        output = subprocess.run(cmd, capture_output=True, check=True)
-        pages = 0
-
-        for line in output.stdout.decode().splitlines():
-            if "Pages:" in line:
-                pages = int(line.split(":")[1])
-
-        return pages
+        return self.renderer.page_count()
 
 
     async def _publish(self):
         """Extract initial representations and enqueue conversion tasks"""
         for page in range(1, self.pagenums + 1):
-            rep = Representation(
-                self.path,
-                Path(self.path.parent, str(page)),
-                "png",
-                "rgb"
+            rep = await self.renderer.render_page(
+                page,
+                Path(self.path.parent, str(page))
             )
-            task = asyncio.create_task(rep.convert(self.password))
+            task = asyncio.create_task(rep.convert())
             batch_e = BatchEntry(task, rep)
             await self.batch.join()
 
