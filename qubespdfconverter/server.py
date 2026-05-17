@@ -146,6 +146,21 @@ class PdfRenderer:
         return rep
 
 
+RENDERERS = {
+    "pdf": PdfRenderer,
+}
+
+
+def create_renderer(name, path, password=b"", resolution=RESOLUTION):
+    """Create a renderer for the requested converter type."""
+    try:
+        renderer_cls = RENDERERS[name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported renderer: {name}") from exc
+
+    return renderer_cls(path, password, resolution)
+
+
 class Representation:
     """Umbrella object for a file's initial and final representations
 
@@ -220,10 +235,9 @@ class BatchEntry:
 
 class BaseFile:
     """Unsanitized file"""
-    def __init__(self, path, password=b""):
+    def __init__(self, path, renderer):
         self.path = path
-        self.password = password
-        self.renderer = PdfRenderer(path, password, args.resolution)
+        self.renderer = renderer
         self.pagenums = 0
         self.batch = None
 
@@ -333,7 +347,8 @@ def main():
     with TemporaryDirectory(prefix="qvm-sanitize") as tmpdir:
         pdf_path = Path(tmpdir, "original")
         pdf_path.write_bytes(data)
-        base = BaseFile(pdf_path, password)
+        renderer = create_renderer("pdf", pdf_path, password, args.resolution)
+        base = BaseFile(pdf_path, renderer)
 
         try:
             asyncio.run(base.sanitize())

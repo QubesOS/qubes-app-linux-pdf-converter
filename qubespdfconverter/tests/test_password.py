@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from qubespdfconverter.server import BaseFile, PdfRenderer
+from qubespdfconverter.server import BaseFile, PdfRenderer, create_renderer
 
 
 class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
@@ -20,7 +20,8 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
     def test_pagenums_includes_password_flags(self):
         """pdfinfo receives -opw/-upw when a password is provided."""
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
-            base = BaseFile(Path(f.name), password=b"secret")
+            renderer = PdfRenderer(Path(f.name), password=b"secret")
+            base = BaseFile(Path(f.name), renderer)
 
             mock_result = mock.Mock()
             mock_result.stdout = b"Pages:           3\n"
@@ -36,7 +37,8 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
     def test_pagenums_omits_password_flags_when_empty(self):
         """pdfinfo does not receive password flags when password is empty."""
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
-            base = BaseFile(Path(f.name), password=b"")
+            renderer = PdfRenderer(Path(f.name), password=b"")
+            base = BaseFile(Path(f.name), renderer)
 
             mock_result = mock.Mock()
             mock_result.stdout = b"Pages:           2\n"
@@ -90,6 +92,26 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             cmd = exec_mock.call_args[0]
             self.assertNotIn("-opw", cmd)
             self.assertNotIn("-upw", cmd)
+
+    def test_create_renderer_returns_pdf_renderer(self):
+        """The server dispatch table creates the PDF renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+            renderer = create_renderer(
+                "pdf",
+                Path(f.name),
+                password=b"secret",
+                resolution=200,
+            )
+
+        self.assertIsInstance(renderer, PdfRenderer)
+        self.assertEqual(renderer.password, b"secret")
+        self.assertEqual(renderer.resolution, "200")
+
+    def test_create_renderer_rejects_unknown_type(self):
+        """Unknown renderer names fail before any conversion starts."""
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+            with self.assertRaises(ValueError):
+                create_renderer("office", Path(f.name))
 
 
 class TC_ServerBackwardCompat(unittest.TestCase):
