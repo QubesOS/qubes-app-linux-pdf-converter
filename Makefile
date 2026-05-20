@@ -49,6 +49,7 @@ install-dom0:
 	$(PYTHON) setup.py install -O1 --root $(DESTDIR)
 	# not needed in dom0
 	rm -f $(DESTDIR)/usr/bin/qvm-convert-pdf
+	rm -f $(DESTDIR)/usr/bin/qvm-convert-file
 	rm -f $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
 
 clean:
