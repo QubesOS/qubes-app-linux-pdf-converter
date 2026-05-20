@@ -11,7 +11,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from qubespdfconverter.server import BaseFile, PdfRenderer, create_renderer
+from qubespdfconverter.server import (
+    BaseFile,
+    PdfRenderer,
+    create_renderer,
+    renderer_name_for_path,
+)
 
 
 class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
@@ -112,6 +117,27 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
             with self.assertRaises(ValueError):
                 create_renderer("office", Path(f.name))
+
+    def test_server_dispatches_pdf_mime_to_pdf_renderer_name(self):
+        """MIME-based renderer selection happens on the server side."""
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, \
+             mock.patch(
+                 "qubespdfconverter.server.detect_mime",
+                 return_value="application/pdf",
+             ):
+            renderer_name = renderer_name_for_path(Path(f.name))
+
+        self.assertEqual(renderer_name, "pdf")
+
+    def test_server_rejects_unsupported_mime(self):
+        """Unsupported MIME types fail before selecting a renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".txt") as f, \
+             mock.patch(
+                 "qubespdfconverter.server.detect_mime",
+                 return_value="text/plain",
+             ):
+            with self.assertRaises(ValueError):
+                renderer_name_for_path(Path(f.name))
 
 
 class TC_ServerBackwardCompat(unittest.TestCase):

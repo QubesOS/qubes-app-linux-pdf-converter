@@ -29,6 +29,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+try:
+    import magic
+except ImportError:
+    magic = None
+
 DEPTH = 8
 STDIN_READ_SIZE = 65536
 # Default resolution in ppi (pixel per inch)
@@ -149,6 +154,27 @@ class PdfRenderer:
 RENDERERS = {
     "pdf": PdfRenderer,
 }
+
+MIME_DISPATCH = {
+    "application/pdf": "pdf",
+}
+
+
+def detect_mime(path):
+    """Detect file type inside the DisposableVM side."""
+    if magic is None:
+        raise ValueError("python-magic is required for MIME detection")
+
+    return magic.from_file(str(path), mime=True)
+
+
+def renderer_name_for_path(path):
+    """Return renderer name for a file detected on the server side."""
+    mime_type = detect_mime(path)
+    try:
+        return MIME_DISPATCH[mime_type]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported file type: {mime_type}") from exc
 
 
 def create_renderer(name, path, password=b"", resolution=RESOLUTION):
@@ -347,12 +373,20 @@ def main():
     with TemporaryDirectory(prefix="qvm-sanitize") as tmpdir:
         pdf_path = Path(tmpdir, "original")
         pdf_path.write_bytes(data)
-        renderer = create_renderer("pdf", pdf_path, password, args.resolution)
-        base = BaseFile(pdf_path, renderer)
 
         try:
+            renderer = create_renderer(
+                renderer_name_for_path(pdf_path),
+                pdf_path,
+                password,
+                args.resolution,
+            )
+            base = BaseFile(pdf_path, renderer)
             asyncio.run(base.sanitize())
         except subprocess.CalledProcessError:
+            sys.exit(1)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr, flush=True)
             sys.exit(1)
 
 
