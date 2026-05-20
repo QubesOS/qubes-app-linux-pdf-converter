@@ -123,23 +123,54 @@ def modify_click_errors(func):
     return func
 
 
+def expand_dir(path):
+    """Expand a directory to a sorted list of non-symlink .pdf files (non-recursive)"""
+    try:
+        entries = sorted(path.iterdir())
+    except PermissionError as e:
+        raise BadPath(path, "Not readable") from e
+
+    pdfs = []
+    for entry in entries:
+        if entry.is_symlink():
+            continue
+        if entry.is_file() and entry.suffix.lower() == ".pdf":
+            pdfs.append(entry)
+    return pdfs
+
+
 def validate_paths(ctx, param, untrusted_paths):
     """Callback for validating file paths parsed by Click"""
+    paths = []
+
     for untrusted_path in untrusted_paths:
-        if not untrusted_path.resolve().exists():
+        untrusted_resolved = untrusted_path.resolve()
+
+        if not untrusted_resolved.exists():
             raise BadPath(untrusted_path, "No such file or directory")
 
-        if not untrusted_path.resolve().is_file():
+        if untrusted_resolved.is_dir():
+            dir_pdfs = expand_dir(untrusted_resolved)
+            if not dir_pdfs:
+                click.echo(f"warning: no PDF files found in {untrusted_path}",
+                           err=True)
+                continue
+            paths.extend(dir_pdfs)
+            continue
+
+        if not untrusted_resolved.is_file():
             raise BadPath(untrusted_path, "Not a regular file")
 
         try:
-            with untrusted_path.resolve().open("rb"):
+            with untrusted_resolved.open("rb"):
                 pass
         except PermissionError as e:
             raise BadPath(untrusted_path, "Not readable") from e
 
-    paths = untrusted_paths
-    return paths
+        resolved = untrusted_resolved
+        paths.append(resolved)
+
+    return tuple(paths)
 
 
 async def cancel_task(task):
