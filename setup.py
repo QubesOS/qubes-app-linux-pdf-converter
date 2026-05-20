@@ -42,6 +42,7 @@ class CustomInstall(setuptools.command.install.install):
         scripts = [
             ('usr/lib/qubes/qpdf-convert-server', 'qubespdfconverter.server'),
             ('usr/bin/qvm-convert-pdf', 'qubespdfconverter.client'),
+            ('usr/bin/qvm-convert-file', 'qubespdfconverter.file_client'),
         ]
         for file, pkg in scripts:
             path = os.path.join(self.root, file)
@@ -64,6 +65,7 @@ setup(
     install_requires=[
         'Click',
         'Pillow',
+        'python-magic',
         'tqdm'
     ],
     entry_points={
