@@ -153,6 +153,7 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         # collection. The timeout must be shorter than the conversion time, to
         # be sure it was canceled.
         timeout = 20
+        orig_timeout = timeout
         while True:
             domains_after = set(self.app.domains)
             if domains_after == domains_before:
@@ -160,9 +161,10 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
             self.loop.run_until_complete(asyncio.sleep(1))
             timeout -= 1
             if timeout <= 0:
+                rest = [domain.name for domain in domains_after - domains_before]
                 self.fail(
-                    'DispVM not cleaned up 10s after cancel: {}'.format(
-                        domains_after - domains_before))
+                    'DispVM not cleaned up {}s after cancel: {}'.format(
+                        orig_timeout, rest))
 
 
 def list_tests():
