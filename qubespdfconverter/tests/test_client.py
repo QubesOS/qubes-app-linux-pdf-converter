@@ -3,13 +3,19 @@
 import asyncio
 import os
 import signal
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from qubespdfconverter.client import BadPath, Job, PageError, expand_dir, run, validate_paths
+from qubespdfconverter.client import (
+    BadPath,
+    Job,
+    PageError,
+    expand_dir,
+    run,
+    validate_paths,
+)
 
 
 class DummyProc:
@@ -33,7 +39,9 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         job = Job(Path("/tmp/test.pdf"), 0)
         proc = DummyProc()
 
-        with mock.patch("asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)):
+        with mock.patch(
+            "asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)
+        ):
             job._setup = mock.AsyncMock()
             job._start = mock.AsyncMock(side_effect=asyncio.CancelledError)
 
@@ -46,7 +54,9 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         job = Job(Path("/tmp/test.pdf"), 0)
         proc = DummyProc()
 
-        with mock.patch("asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)):
+        with mock.patch(
+            "asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)
+        ):
             job._setup = mock.AsyncMock(side_effect=PageError)
 
             with self.assertRaises(PageError):
@@ -59,13 +69,15 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         add_handler_mock = mock.Mock()
 
         with mock.patch.object(loop, "add_signal_handler", new=add_handler_mock):
-            result = await run({
-                "resolution": 300,
-                "files": [],
-                "archive": Path("/tmp/archive"),
-                "batch": 1,
-                "in_place": False,
-            })
+            result = await run(
+                {
+                    "resolution": 300,
+                    "files": [],
+                    "archive": Path("/tmp/archive"),
+                    "batch": 1,
+                    "in_place": False,
+                }
+            )
 
         self.assertFalse(result)
         handled = {call.args[0] for call in add_handler_mock.mock_calls}
@@ -99,7 +111,6 @@ class TC_ExpandDir(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].name, "doc.pdf")
 
-    @unittest.skipUnless(sys.platform != 'win32', 'symlink creation requires POSIX')
     def test_002_ignores_symlinks(self):
         real = self._touch("real.pdf")
         link = self.d / "link.pdf"
@@ -119,7 +130,6 @@ class TC_ExpandDir(unittest.TestCase):
         result = expand_dir(self.d)
         self.assertEqual(len(result), 2)
 
-    @unittest.skipUnless(sys.platform != 'win32', 'chmod 000 not enforced on Windows')
     def test_005_unreadable_directory_raises_badpath(self):
         self.d.chmod(0o000)
         try:
@@ -161,7 +171,7 @@ class TC_ValidatePaths(unittest.TestCase):
         result = validate_paths(None, None, [self.d])
         self.assertEqual(result, ())
 
-    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'mkfifo not available on this platform')
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "mkfifo not available on this platform")
     def test_004_non_file_non_dir_raises_badpath(self):
         fifo = self.d / "pipe"
         os.mkfifo(fifo)
