@@ -38,6 +38,9 @@ BuildRequires: make
 BuildRequires: python%{python3_pkgversion}-devel
 BuildRequires: python%{python3_pkgversion}-setuptools
 
+# Do not pull in extra dependencies in dom0
+%{?python_disable_dependency_generator}
+
 Source0: %{name}-%{version}.tar.gz
 
 %description
