@@ -73,6 +73,52 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
         if p.returncode != 0:
             self.skipTest('failed to create test pdf: {}'.format(stdout))
 
+    def create_docx(self, filename, text):
+        '''Create DOCX file with given (textual) content
+
+        :param filename: output filename
+        :param text: text to be placed in the document
+        '''
+        script = r'''
+import sys
+import zipfile
+
+filename = sys.argv[1]
+text = sys.argv[2]
+
+content_types = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>
+""") + r'''
+rels = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>
+""") + r'''
+document = f''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>{text}</w:t></w:r></w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>
+""") + r'''.format(text=text)
+
+with zipfile.ZipFile(filename, "w") as docx:
+    docx.writestr("[Content_Types].xml", content_types)
+    docx.writestr("_rels/.rels", rels)
+    docx.writestr("word/document.xml", document)
+'''
+        p = self.vm.run(
+            'python3 - "{}" "{}"'.format(filename, text),
+            passio_popen=True)
+        (stdout, _) = p.communicate(script.encode())
+        if p.returncode != 0:
+            self.skipTest('failed to create test docx: {}'.format(stdout))
+
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
@@ -165,6 +211,26 @@ class TC_00_PDFConverter(qubes.tests.extra.ExtraTestCase):
                 self.fail(
                     'DispVM not cleaned up {}s after cancel: {}'.format(
                         orig_timeout, rest))
+
+    def test_005_docx(self):
+        if self.vm.run('command -v libreoffice >/dev/null', wait=True) != 0:
+            self.skipTest('libreoffice not installed')
+        self.create_docx('test.docx', 'This is test')
+        p = self.vm.run(
+            'cp test.docx orig.docx; qvm-convert-file test.docx 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertEqual(
+            p.returncode, 0, 'qvm-convert-file failed: {}'.format(stdout))
+        self.assertEqual(
+            self.vm.run('test -r "test.trusted.pdf"', wait=True), 0)
+        trusted_info = self.get_pdfinfo('test.trusted.pdf')
+        self.assertGreaterEqual(int(trusted_info['Pages']), 1)
+
+        self.assertEqual(
+            self.vm.run('test -r "QubesUntrustedPDFs/test.docx"', wait=True), 0)
+        self.assertEqual(self.vm.run(
+            'diff "orig.docx" "QubesUntrustedPDFs/test.docx"', wait=True), 0)
 
 
 def list_tests():

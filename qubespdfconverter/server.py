@@ -22,6 +22,7 @@
 
 import argparse
 import asyncio
+import shutil
 import subprocess
 import sys
 
@@ -147,12 +148,56 @@ class PdfRenderer:
         return rep
 
 
+class DocxRenderer:
+    """Convert DOCX documents to PDF, then render the PDF pages."""
+
+    def __init__(self, path, password=b"", resolution=RESOLUTION):
+        self.path = path
+        self.resolution = resolution
+        self._pdf_renderer = None
+
+    def pdf_renderer(self):
+        if self._pdf_renderer is not None:
+            return self._pdf_renderer
+
+        docx_path = Path(self.path.parent, "input.docx")
+        shutil.copyfile(self.path, docx_path)
+
+        cmd = [
+            "libreoffice",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(self.path.parent),
+            str(docx_path),
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+
+        pdf_path = docx_path.with_suffix(".pdf")
+        if not pdf_path.exists():
+            raise ValueError("DOCX conversion did not produce a PDF")
+
+        self._pdf_renderer = PdfRenderer(pdf_path, resolution=self.resolution)
+        return self._pdf_renderer
+
+    def page_count(self):
+        """Return the number of pages in the converted document."""
+        return self.pdf_renderer().page_count()
+
+    async def render_page(self, page, prefix):
+        """Render one converted document page into an image."""
+        return await self.pdf_renderer().render_page(page, prefix)
+
+
 RENDERERS = {
+    "docx": DocxRenderer,
     "pdf": PdfRenderer,
 }
 
 MIME_DISPATCH = {
     "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ("docx"),
 }
 
 
