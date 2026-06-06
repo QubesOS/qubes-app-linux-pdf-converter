@@ -67,8 +67,7 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             mock_proc.wait = mock.AsyncMock(return_value=0)
 
             with mock.patch(
-                "asyncio.create_subprocess_exec",
-                return_value=mock_proc
+                "asyncio.create_subprocess_exec", return_value=mock_proc
             ) as exec_mock:
                 await renderer.create_page_image(1, Path(tmpdir, "1.png"))
 
@@ -89,8 +88,7 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             mock_proc.wait = mock.AsyncMock(return_value=0)
 
             with mock.patch(
-                "asyncio.create_subprocess_exec",
-                return_value=mock_proc
+                "asyncio.create_subprocess_exec", return_value=mock_proc
             ) as exec_mock:
                 await renderer.create_page_image(1, Path(tmpdir, "1.png"))
 
@@ -120,22 +118,20 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
 
     def test_server_dispatches_pdf_mime_to_pdf_renderer_name(self):
         """MIME-based renderer selection happens on the server side."""
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, \
-             mock.patch(
-                 "qubespdfconverter.server.detect_mime",
-                 return_value="application/pdf",
-             ):
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value="application/pdf",
+        ):
             renderer_name = renderer_name_for_path(Path(f.name))
 
         self.assertEqual(renderer_name, "pdf")
 
     def test_server_rejects_unsupported_mime(self):
         """Unsupported MIME types fail before selecting a renderer."""
-        with tempfile.NamedTemporaryFile(suffix=".txt") as f, \
-             mock.patch(
-                 "qubespdfconverter.server.detect_mime",
-                 return_value="text/plain",
-             ):
+        with tempfile.NamedTemporaryFile(suffix=".txt") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value="text/plain",
+        ):
             with self.assertRaises(ValueError):
                 renderer_name_for_path(Path(f.name))
 
@@ -150,7 +146,7 @@ class TC_ServerBackwardCompat(unittest.TestCase):
         first_line = buf.readline()
 
         if first_line.startswith(b"--password="):
-            password = first_line[len(b"--password="):].rstrip(b"\n")
+            password = first_line[len(b"--password=") :].rstrip(b"\n")
             prefix = b""
         else:
             password = b""
@@ -201,8 +197,9 @@ class TC_ClientPassword(unittest.IsolatedAsyncioTestCase):
         mock_proc.stdin = mock.Mock()
         job.proc = mock_proc
 
-        with mock.patch("qubespdfconverter.client.send", side_effect=fake_send), \
-             mock.patch.object(Path, "read_bytes", return_value=b"%PDF-1.4"):
+        with mock.patch(
+            "qubespdfconverter.client.send", side_effect=fake_send
+        ), mock.patch.object(Path, "read_bytes", return_value=b"%PDF-1.4"):
             await job._send()
 
         self.assertEqual(sent_data[0], "--password=hunter2\n")
@@ -223,8 +220,9 @@ class TC_ClientPassword(unittest.IsolatedAsyncioTestCase):
         mock_proc.stdin = mock.Mock()
         job.proc = mock_proc
 
-        with mock.patch("qubespdfconverter.client.send", side_effect=fake_send), \
-             mock.patch.object(Path, "read_bytes", return_value=b"%PDF-1.4"):
+        with mock.patch(
+            "qubespdfconverter.client.send", side_effect=fake_send
+        ), mock.patch.object(Path, "read_bytes", return_value=b"%PDF-1.4"):
             await job._send()
 
         self.assertEqual(len(sent_data), 1)
@@ -271,8 +269,9 @@ class TC_ClientDetectionAndPrompt(unittest.TestCase):
         result.returncode = 0
         result.stdout = b"secret\n"
 
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, \
-             mock.patch("subprocess.run", return_value=result):
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, mock.patch(
+            "subprocess.run", return_value=result
+        ):
             password = prompt_password_zenity(Path(f.name))
 
         self.assertEqual(password, "secret")
@@ -285,8 +284,9 @@ class TC_ClientDetectionAndPrompt(unittest.TestCase):
         result.returncode = 1
         result.stdout = b""
 
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, \
-             mock.patch("subprocess.run", return_value=result):
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f, mock.patch(
+            "subprocess.run", return_value=result
+        ):
             password = prompt_password_zenity(Path(f.name))
 
         self.assertIsNone(password)
