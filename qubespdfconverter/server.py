@@ -22,6 +22,7 @@
 
 import argparse
 import asyncio
+import shutil
 import subprocess
 import sys
 
@@ -103,13 +104,11 @@ class PdfRenderer:
         self.password = password
         self.resolution = str(resolution)
 
-
     def _password_args(self):
         if not self.password:
             return []
         password = self.password.decode()
         return ["-opw", password, "-upw", password]
-
 
     def page_count(self):
         """Return the number of pages in the PDF."""
@@ -122,7 +121,6 @@ class PdfRenderer:
                 pages = int(line.split(":")[1])
 
         return pages
-
 
     async def create_page_image(self, page, output):
         """Render one PDF page into an image."""
@@ -137,12 +135,11 @@ class PdfRenderer:
             "-l",
             str(page),
             "-singlefile",
-            str(Path(output.parent, output.stem))
+            str(Path(output.parent, output.stem)),
         ]
 
         proc = await asyncio.create_subprocess_exec(*cmd)
         await wait_proc(proc, cmd)
-
 
     async def render_page(self, page, prefix):
         """Create an intermediate page representation."""
@@ -151,12 +148,56 @@ class PdfRenderer:
         return rep
 
 
+class DocxRenderer:
+    """Convert DOCX documents to PDF, then render the PDF pages."""
+
+    def __init__(self, path, password=b"", resolution=RESOLUTION):
+        self.path = path
+        self.resolution = resolution
+        self._pdf_renderer = None
+
+    def pdf_renderer(self):
+        if self._pdf_renderer is not None:
+            return self._pdf_renderer
+
+        docx_path = Path(self.path.parent, "input.docx")
+        shutil.copyfile(self.path, docx_path)
+
+        cmd = [
+            "libreoffice",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(self.path.parent),
+            str(docx_path),
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+
+        pdf_path = docx_path.with_suffix(".pdf")
+        if not pdf_path.exists():
+            raise ValueError("DOCX conversion did not produce a PDF")
+
+        self._pdf_renderer = PdfRenderer(pdf_path, resolution=self.resolution)
+        return self._pdf_renderer
+
+    def page_count(self):
+        """Return the number of pages in the converted document."""
+        return self.pdf_renderer().page_count()
+
+    async def render_page(self, page, prefix):
+        """Render one converted document page into an image."""
+        return await self.pdf_renderer().render_page(page, prefix)
+
+
 RENDERERS = {
+    "docx": DocxRenderer,
     "pdf": PdfRenderer,
 }
 
 MIME_DISPATCH = {
     "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ("docx"),
 }
 
 
@@ -211,7 +252,6 @@ class Representation:
         self.final = prefix.with_suffix(f".{f_suffix}")
         self.dim = None
 
-
     async def convert(self):
         """Convert initial representation to final representation"""
         cmd = [
@@ -220,7 +260,7 @@ class Representation:
             str(self.initial),
             "-depth",
             str(DEPTH),
-            f"rgb:{self.final}"
+            f"rgb:{self.final}",
         ]
 
         self.dim = await self._dim()
@@ -229,20 +269,12 @@ class Representation:
         try:
             await wait_proc(proc, cmd)
         finally:
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                unlink,
-                self.initial
-            )
-
+            await asyncio.get_running_loop().run_in_executor(None, unlink, self.initial)
 
     async def _dim(self):
         """Identify image dimensions of initial representation"""
         cmd = ["gm", "identify", "-format", "%w %h", str(self.initial)]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE
-        )
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE)
 
         try:
             output, _ = await proc.communicate()
@@ -261,12 +293,12 @@ class BatchEntry:
 
 class BaseFile:
     """Unsanitized file"""
+
     def __init__(self, path, renderer):
         self.path = path
         self.renderer = renderer
         self.pagenums = 0
         self.batch = None
-
 
     async def sanitize(self):
         """Start sanitization tasks"""
@@ -290,18 +322,15 @@ class BaseFile:
 
             raise
 
-
     def _pagenums(self):
         """Return the number of pages in the suspect file"""
         return self.renderer.page_count()
-
 
     async def _publish(self):
         """Extract initial representations and enqueue conversion tasks"""
         for page in range(1, self.pagenums + 1):
             rep = await self.renderer.render_page(
-                page,
-                Path(self.path.parent, str(page))
+                page, Path(self.path.parent, str(page))
             )
             task = asyncio.create_task(rep.convert())
             batch_e = BatchEntry(task, rep)
@@ -313,7 +342,6 @@ class BaseFile:
                 await cancel_task(task)
                 raise
 
-
     async def _consume(self):
         """Await conversion tasks and send final representation to client"""
         for _ in range(self.pagenums):
@@ -321,35 +349,36 @@ class BaseFile:
             await batch_e.task
 
             rgb_data = await asyncio.get_running_loop().run_in_executor(
-                None,
-                batch_e.rep.final.read_bytes
+                None, batch_e.rep.final.read_bytes
             )
 
             await asyncio.get_running_loop().run_in_executor(
-                None,
-                unlink,
-                batch_e.rep.final
+                None, unlink, batch_e.rep.final
             )
 
             await asyncio.get_running_loop().run_in_executor(
-                None,
-                send,
-                batch_e.rep.dim
+                None, send, batch_e.rep.dim
             )
             send_b(rgb_data)
 
             self.batch.task_done()
 
-parser = argparse.ArgumentParser(
-        prog="qubes.PdfConvert",
-        description="Server side of qvm-convert-pdf",
-        epilog="Refer to qvm-convert-pdf(1) manual for more information")
 
-parser.add_argument('resolution', nargs='?',
-                    default=str(RESOLUTION),
-                    help='Default resolution is 300 ppi')
+parser = argparse.ArgumentParser(
+    prog="qubes.PdfConvert",
+    description="Server side of qvm-convert-pdf",
+    epilog="Refer to qvm-convert-pdf(1) manual for more information",
+)
+
+parser.add_argument(
+    "resolution",
+    nargs="?",
+    default=str(RESOLUTION),
+    help="Default resolution is 300 ppi",
+)
 
 args = parser.parse_args()
+
 
 def main():
     first_line = sys.stdin.buffer.readline()
@@ -359,7 +388,7 @@ def main():
     # clients without a password send the PDF bytes directly, so the
     # first line is part of the PDF data.
     if first_line.startswith(b"--password="):
-        password = first_line[len(b"--password="):].rstrip(b"\n")
+        password = first_line[len(b"--password=") :].rstrip(b"\n")
         prefix = b""
     else:
         password = b""
