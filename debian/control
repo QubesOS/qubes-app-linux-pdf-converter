@@ -19,7 +19,6 @@ Depends:
  poppler-utils,
  graphicsmagick,
  python3 (>= 3.7.0),
- python3-nautilus | python-nautilus,
  python3-click,
  python3-magic,
  python3-pillow,
@@ -27,4 +26,6 @@ Depends:
  ${misc:Depends}
 Recommends:
  zenity
+Suggests:
+ python3-nautilus | python-nautilus,
 Description: The Qubes service for converting untrusted PDF files into trusted ones

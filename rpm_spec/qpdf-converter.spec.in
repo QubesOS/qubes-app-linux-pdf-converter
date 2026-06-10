@@ -46,9 +46,9 @@ BuildRequires: qubes-core-qrexec
 
 Requires:	poppler-utils GraphicsMagick
 %if 0%{?is_opensuse}
-Requires:	python-nautilus-common-files
+Recommends:	(python-nautilus-common-files if nautilus)
 %else
-Requires:	nautilus-python
+Recommends:	(nautilus-python if nautilus)
 %endif
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
