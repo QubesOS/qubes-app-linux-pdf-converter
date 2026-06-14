@@ -13,7 +13,7 @@ from unittest import mock
 
 from qubespdfconverter.server import (
     BaseFile,
-    DocxRenderer,
+    LibreOfficeDocumentRenderer,
     PdfRenderer,
     create_renderer,
     renderer_name_for_path,
@@ -116,8 +116,18 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         with tempfile.NamedTemporaryFile(suffix=".docx") as f:
             renderer = create_renderer("docx", Path(f.name), resolution=200)
 
-        self.assertIsInstance(renderer, DocxRenderer)
+        self.assertIsInstance(renderer, LibreOfficeDocumentRenderer)
         self.assertEqual(renderer.resolution, 200)
+        self.assertEqual(renderer.suffix, ".docx")
+
+    def test_create_renderer_returns_odt_renderer(self):
+        """The server dispatch table creates the ODT renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".odt") as f:
+            renderer = create_renderer("odt", Path(f.name), resolution=200)
+
+        self.assertIsInstance(renderer, LibreOfficeDocumentRenderer)
+        self.assertEqual(renderer.resolution, 200)
+        self.assertEqual(renderer.suffix, ".odt")
 
     def test_create_renderer_rejects_unknown_type(self):
         """Unknown renderer names fail before any conversion starts."""
@@ -149,6 +159,18 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(renderer_name, "docx")
 
+    def test_server_dispatches_odt_mime_to_odt_renderer_name(self):
+        """ODT MIME detection selects the shared document renderer."""
+        mime_type = "application/vnd.oasis.opendocument.text"
+
+        with tempfile.NamedTemporaryFile(suffix=".odt") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value=mime_type,
+        ):
+            renderer_name = renderer_name_for_path(Path(f.name))
+
+        self.assertEqual(renderer_name, "odt")
+
     def test_server_rejects_unsupported_mime(self):
         """Unsupported MIME types fail before selecting a renderer."""
         with tempfile.NamedTemporaryFile(suffix=".txt") as f, mock.patch(
@@ -163,7 +185,7 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir, "source.docx")
             path.write_bytes(b"docx")
-            renderer = DocxRenderer(path, resolution=200)
+            renderer = LibreOfficeDocumentRenderer(path, resolution=200, suffix=".docx")
 
             def fake_run(cmd, capture_output, check):
                 if cmd[0] == "libreoffice":
@@ -184,11 +206,30 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir, "source.docx")
             path.write_bytes(b"docx")
-            renderer = DocxRenderer(path, resolution=200)
+            renderer = LibreOfficeDocumentRenderer(path, resolution=200, suffix=".docx")
 
             with mock.patch("subprocess.run", return_value=mock.Mock()):
                 with self.assertRaises(ValueError):
                     renderer.page_count()
+
+    def test_odt_renderer_uses_odt_extension_for_libreoffice(self):
+        """ODT rendering uses the same LibreOffice path with an ODT input."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.odt")
+            path.write_bytes(b"odt")
+            renderer = LibreOfficeDocumentRenderer(path, resolution=200, suffix=".odt")
+
+            def fake_run(cmd, capture_output, check):
+                if cmd[0] == "libreoffice":
+                    self.assertEqual(Path(cmd[-1]).suffix, ".odt")
+                    Path(cmd[-1]).with_suffix(".pdf").write_bytes(b"%PDF-1.7")
+                    return mock.Mock(stdout=b"")
+
+                self.assertEqual(cmd[0], "pdfinfo")
+                return mock.Mock(stdout=b"Pages:           2\n")
+
+            with mock.patch("subprocess.run", side_effect=fake_run):
+                self.assertEqual(renderer.page_count(), 2)
 
 
 class TC_ServerBackwardCompat(unittest.TestCase):

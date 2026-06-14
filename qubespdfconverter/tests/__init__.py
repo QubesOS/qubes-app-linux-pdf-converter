@@ -119,6 +119,52 @@ with zipfile.ZipFile(filename, "w") as docx:
         if p.returncode != 0:
             self.skipTest('failed to create test docx: {}'.format(stdout))
 
+    def create_odt(self, filename, text):
+        '''Create ODT file with given (textual) content
+
+        :param filename: output filename
+        :param text: text to be placed in the document
+        '''
+        script = r'''
+import sys
+import zipfile
+
+filename = sys.argv[1]
+text = sys.argv[2]
+
+manifest = ''' + repr("""<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+  xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+  manifest:version="1.2">
+  <manifest:file-entry manifest:media-type="application/vnd.oasis.opendocument.text" manifest:full-path="/"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="content.xml"/>
+</manifest:manifest>
+""") + r'''
+content = f''' + repr("""<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content
+  xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  office:version="1.2">
+  <office:body>
+    <office:text>
+      <text:p>{text}</text:p>
+    </office:text>
+  </office:body>
+</office:document-content>
+""") + r'''.format(text=text)
+
+with zipfile.ZipFile(filename, "w") as odt:
+    odt.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+    odt.writestr("META-INF/manifest.xml", manifest)
+    odt.writestr("content.xml", content)
+'''
+        p = self.vm.run(
+            'python3 - "{}" "{}"'.format(filename, text),
+            passio_popen=True)
+        (stdout, _) = p.communicate(script.encode())
+        if p.returncode != 0:
+            self.skipTest('failed to create test odt: {}'.format(stdout))
+
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
@@ -231,6 +277,26 @@ with zipfile.ZipFile(filename, "w") as docx:
             self.vm.run('test -r "QubesUntrustedPDFs/test.docx"', wait=True), 0)
         self.assertEqual(self.vm.run(
             'diff "orig.docx" "QubesUntrustedPDFs/test.docx"', wait=True), 0)
+
+    def test_006_odt(self):
+        if self.vm.run('command -v libreoffice >/dev/null', wait=True) != 0:
+            self.skipTest('libreoffice not installed')
+        self.create_odt('test.odt', 'This is test')
+        p = self.vm.run(
+            'cp test.odt orig.odt; qvm-convert-file test.odt 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertEqual(
+            p.returncode, 0, 'qvm-convert-file failed: {}'.format(stdout))
+        self.assertEqual(
+            self.vm.run('test -r "test.trusted.pdf"', wait=True), 0)
+        trusted_info = self.get_pdfinfo('test.trusted.pdf')
+        self.assertGreaterEqual(int(trusted_info['Pages']), 1)
+
+        self.assertEqual(
+            self.vm.run('test -r "QubesUntrustedPDFs/test.odt"', wait=True), 0)
+        self.assertEqual(self.vm.run(
+            'diff "orig.odt" "QubesUntrustedPDFs/test.odt"', wait=True), 0)
 
 
 def list_tests():

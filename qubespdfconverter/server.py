@@ -22,6 +22,7 @@
 
 import argparse
 import asyncio
+import functools
 import shutil
 import subprocess
 import sys
@@ -148,20 +149,21 @@ class PdfRenderer:
         return rep
 
 
-class DocxRenderer:
-    """Convert DOCX documents to PDF, then render the PDF pages."""
+class LibreOfficeDocumentRenderer:
+    """Convert office documents to PDF, then render the PDF pages."""
 
-    def __init__(self, path, password=b"", resolution=RESOLUTION):
+    def __init__(self, path, password=b"", resolution=RESOLUTION, suffix=".docx"):
         self.path = path
         self.resolution = resolution
+        self.suffix = suffix
         self._pdf_renderer = None
 
     def pdf_renderer(self):
         if self._pdf_renderer is not None:
             return self._pdf_renderer
 
-        docx_path = Path(self.path.parent, "input.docx")
-        shutil.copyfile(self.path, docx_path)
+        document_path = Path(self.path.parent, "input" + self.suffix)
+        shutil.copyfile(self.path, document_path)
 
         cmd = [
             "libreoffice",
@@ -170,13 +172,13 @@ class DocxRenderer:
             "pdf",
             "--outdir",
             str(self.path.parent),
-            str(docx_path),
+            str(document_path),
         ]
         subprocess.run(cmd, capture_output=True, check=True)
 
-        pdf_path = docx_path.with_suffix(".pdf")
+        pdf_path = document_path.with_suffix(".pdf")
         if not pdf_path.exists():
-            raise ValueError("DOCX conversion did not produce a PDF")
+            raise ValueError("document conversion did not produce a PDF")
 
         self._pdf_renderer = PdfRenderer(pdf_path, resolution=self.resolution)
         return self._pdf_renderer
@@ -191,13 +193,15 @@ class DocxRenderer:
 
 
 RENDERERS = {
-    "docx": DocxRenderer,
+    "docx": functools.partial(LibreOfficeDocumentRenderer, suffix=".docx"),
+    "odt": functools.partial(LibreOfficeDocumentRenderer, suffix=".odt"),
     "pdf": PdfRenderer,
 }
 
 MIME_DISPATCH = {
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ("docx"),
+    "application/vnd.oasis.opendocument.text": "odt",
 }
 
 
