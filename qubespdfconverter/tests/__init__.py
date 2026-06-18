@@ -165,6 +165,69 @@ with zipfile.ZipFile(filename, "w") as odt:
         if p.returncode != 0:
             self.skipTest('failed to create test odt: {}'.format(stdout))
 
+    def create_xlsx(self, filename, text):
+        '''Create XLSX file with given (textual) content
+
+        :param filename: output filename
+        :param text: text to be placed in the spreadsheet
+        '''
+        script = r'''
+import sys
+import zipfile
+
+filename = sys.argv[1]
+text = sys.argv[2]
+
+content_types = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>
+""") + r'''
+rels = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>
+""") + r'''
+workbook_rels = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>
+""") + r'''
+workbook = ''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>
+""") + r'''
+sheet = f''' + repr("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="inlineStr"><is><t>{text}</t></is></c>
+    </row>
+  </sheetData>
+</worksheet>
+""") + r'''.format(text=text)
+
+with zipfile.ZipFile(filename, "w") as xlsx:
+    xlsx.writestr("[Content_Types].xml", content_types)
+    xlsx.writestr("_rels/.rels", rels)
+    xlsx.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+    xlsx.writestr("xl/workbook.xml", workbook)
+    xlsx.writestr("xl/worksheets/sheet1.xml", sheet)
+'''
+        p = self.vm.run(
+            'python3 - "{}" "{}"'.format(filename, text),
+            passio_popen=True)
+        (stdout, _) = p.communicate(script.encode())
+        if p.returncode != 0:
+            self.skipTest('failed to create test xlsx: {}'.format(stdout))
+
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
@@ -297,6 +360,26 @@ with zipfile.ZipFile(filename, "w") as odt:
             self.vm.run('test -r "QubesUntrustedPDFs/test.odt"', wait=True), 0)
         self.assertEqual(self.vm.run(
             'diff "orig.odt" "QubesUntrustedPDFs/test.odt"', wait=True), 0)
+
+    def test_007_xlsx(self):
+        if self.vm.run('command -v libreoffice >/dev/null', wait=True) != 0:
+            self.skipTest('libreoffice not installed')
+        self.create_xlsx('test.xlsx', 'This is test')
+        p = self.vm.run(
+            'cp test.xlsx orig.xlsx; qvm-convert-file test.xlsx 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertEqual(
+            p.returncode, 0, 'qvm-convert-file failed: {}'.format(stdout))
+        self.assertEqual(
+            self.vm.run('test -r "test.trusted.pdf"', wait=True), 0)
+        trusted_info = self.get_pdfinfo('test.trusted.pdf')
+        self.assertGreaterEqual(int(trusted_info['Pages']), 1)
+
+        self.assertEqual(
+            self.vm.run('test -r "QubesUntrustedPDFs/test.xlsx"', wait=True), 0)
+        self.assertEqual(self.vm.run(
+            'diff "orig.xlsx" "QubesUntrustedPDFs/test.xlsx"', wait=True), 0)
 
 
 def list_tests():
