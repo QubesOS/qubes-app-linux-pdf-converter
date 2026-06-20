@@ -228,6 +228,59 @@ with zipfile.ZipFile(filename, "w") as xlsx:
         if p.returncode != 0:
             self.skipTest('failed to create test xlsx: {}'.format(stdout))
 
+    def create_ods(self, filename, text):
+        '''Create ODS file with given (textual) content
+
+        :param filename: output filename
+        :param text: text to be placed in the spreadsheet
+        '''
+        script = r'''
+import sys
+import zipfile
+
+filename = sys.argv[1]
+text = sys.argv[2]
+
+manifest = ''' + repr("""<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest
+  xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+  manifest:version="1.2">
+  <manifest:file-entry manifest:media-type="application/vnd.oasis.opendocument.spreadsheet" manifest:full-path="/"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="content.xml"/>
+</manifest:manifest>
+""") + r'''
+content = f''' + repr("""<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content
+  xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  office:version="1.2">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Sheet1">
+        <table:table-row>
+          <table:table-cell office:value-type="string">
+            <text:p>{text}</text:p>
+          </table:table-cell>
+        </table:table-row>
+      </table:table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>
+""") + r'''.format(text=text)
+
+with zipfile.ZipFile(filename, "w") as ods:
+    ods.writestr("mimetype", "application/vnd.oasis.opendocument.spreadsheet")
+    ods.writestr("META-INF/manifest.xml", manifest)
+    ods.writestr("content.xml", content)
+'''
+        p = self.vm.run(
+            'python3 - "{}" "{}"'.format(filename, text),
+            passio_popen=True)
+        (stdout, _) = p.communicate(script.encode())
+        if p.returncode != 0:
+            self.skipTest('failed to create test ods: {}'.format(stdout))
+
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
@@ -380,6 +433,26 @@ with zipfile.ZipFile(filename, "w") as xlsx:
             self.vm.run('test -r "QubesUntrustedPDFs/test.xlsx"', wait=True), 0)
         self.assertEqual(self.vm.run(
             'diff "orig.xlsx" "QubesUntrustedPDFs/test.xlsx"', wait=True), 0)
+
+    def test_008_ods(self):
+        if self.vm.run('command -v libreoffice >/dev/null', wait=True) != 0:
+            self.skipTest('libreoffice not installed')
+        self.create_ods('test.ods', 'This is test')
+        p = self.vm.run(
+            'cp test.ods orig.ods; qvm-convert-file test.ods 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertEqual(
+            p.returncode, 0, 'qvm-convert-file failed: {}'.format(stdout))
+        self.assertEqual(
+            self.vm.run('test -r "test.trusted.pdf"', wait=True), 0)
+        trusted_info = self.get_pdfinfo('test.trusted.pdf')
+        self.assertGreaterEqual(int(trusted_info['Pages']), 1)
+
+        self.assertEqual(
+            self.vm.run('test -r "QubesUntrustedPDFs/test.ods"', wait=True), 0)
+        self.assertEqual(self.vm.run(
+            'diff "orig.ods" "QubesUntrustedPDFs/test.ods"', wait=True), 0)
 
 
 def list_tests():

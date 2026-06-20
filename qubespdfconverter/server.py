@@ -194,6 +194,7 @@ class LibreOfficeDocumentRenderer:
 
 RENDERERS = {
     "docx": functools.partial(LibreOfficeDocumentRenderer, suffix=".docx"),
+    "ods": functools.partial(LibreOfficeDocumentRenderer, suffix=".ods"),
     "odt": functools.partial(LibreOfficeDocumentRenderer, suffix=".odt"),
     "pdf": PdfRenderer,
     "xlsx": functools.partial(LibreOfficeDocumentRenderer, suffix=".xlsx"),
@@ -202,6 +203,7 @@ RENDERERS = {
 MIME_DISPATCH = {
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ("docx"),
+    "application/vnd.oasis.opendocument.spreadsheet": "ods",
     "application/vnd.oasis.opendocument.text": "odt",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
 }

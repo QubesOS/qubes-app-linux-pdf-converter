@@ -129,6 +129,15 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(renderer.resolution, 200)
         self.assertEqual(renderer.suffix, ".odt")
 
+    def test_create_renderer_returns_ods_renderer(self):
+        """The server dispatch table creates the ODS renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".ods") as f:
+            renderer = create_renderer("ods", Path(f.name), resolution=200)
+
+        self.assertIsInstance(renderer, LibreOfficeDocumentRenderer)
+        self.assertEqual(renderer.resolution, 200)
+        self.assertEqual(renderer.suffix, ".ods")
+
     def test_create_renderer_returns_xlsx_renderer(self):
         """The server dispatch table creates the XLSX renderer."""
         with tempfile.NamedTemporaryFile(suffix=".xlsx") as f:
@@ -179,6 +188,18 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             renderer_name = renderer_name_for_path(Path(f.name))
 
         self.assertEqual(renderer_name, "odt")
+
+    def test_server_dispatches_ods_mime_to_ods_renderer_name(self):
+        """ODS MIME detection selects the shared document renderer."""
+        mime_type = "application/vnd.oasis.opendocument.spreadsheet"
+
+        with tempfile.NamedTemporaryFile(suffix=".ods") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value=mime_type,
+        ):
+            renderer_name = renderer_name_for_path(Path(f.name))
+
+        self.assertEqual(renderer_name, "ods")
 
     def test_server_dispatches_xlsx_mime_to_xlsx_renderer_name(self):
         """XLSX MIME detection selects the shared document renderer."""
@@ -245,6 +266,25 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             def fake_run(cmd, capture_output, check):
                 if cmd[0] == "libreoffice":
                     self.assertEqual(Path(cmd[-1]).suffix, ".odt")
+                    Path(cmd[-1]).with_suffix(".pdf").write_bytes(b"%PDF-1.7")
+                    return mock.Mock(stdout=b"")
+
+                self.assertEqual(cmd[0], "pdfinfo")
+                return mock.Mock(stdout=b"Pages:           2\n")
+
+            with mock.patch("subprocess.run", side_effect=fake_run):
+                self.assertEqual(renderer.page_count(), 2)
+
+    def test_ods_renderer_uses_ods_extension_for_libreoffice(self):
+        """ODS rendering uses the same LibreOffice path with an ODS input."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.ods")
+            path.write_bytes(b"ods")
+            renderer = LibreOfficeDocumentRenderer(path, resolution=200, suffix=".ods")
+
+            def fake_run(cmd, capture_output, check):
+                if cmd[0] == "libreoffice":
+                    self.assertEqual(Path(cmd[-1]).suffix, ".ods")
                     Path(cmd[-1]).with_suffix(".pdf").write_bytes(b"%PDF-1.7")
                     return mock.Mock(stdout=b"")
 
