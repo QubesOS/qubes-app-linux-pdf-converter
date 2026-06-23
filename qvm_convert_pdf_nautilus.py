@@ -3,11 +3,14 @@ import os
 from gi.repository import Nautilus, GObject, GLib
 
 
+SUPPORTED_EXTENSIONS = ('.pdf', '.docx', '.odt', '.xlsx', '.ods')
+
+
 class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
-    '''Send PDF to disposable virtual machine to convert to a safe format.
+    '''Send files to disposable virtual machine to convert to a safe format.
 
     Uses the nautilus-python api to provide a context menu within Nautilus which
-    will enable the user to select PDF file(s) to send to a disposable virtual
+    will enable the user to select file(s) to send to a disposable virtual
     machine for safe processing
     '''
 
@@ -31,9 +34,9 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
             if file_obj.is_directory():
                 continue
 
-            # Only attach context menu to pdf files
-            filename, ext = os.path.splitext(file_obj.get_name())
-            if ext and ext.lower() not in ['.pdf']:
+            # Only attach context menu to supported file types
+            _, ext = os.path.splitext(file_obj.get_name())
+            if ext.lower() not in SUPPORTED_EXTENSIONS:
                 return
 
         menu_item = Nautilus.MenuItem(name='QubesMenuProvider::ConvertPdf',
@@ -47,18 +50,23 @@ class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):
     def on_menu_item_clicked(self, menu, files):
         '''Called when user chooses files through Nautilus context menu.
 
-        Collects all selected PDF files and directories into a single
+        Collects all selected files and directories into a single
         qvm-convert-pdf.gnome invocation so one progress window is shown.
         '''
         paths = []
+        backend = '--pdf'
         for file_obj in files:
             if file_obj.is_gone():
                 continue
+            if not file_obj.is_directory():
+                _, ext = os.path.splitext(file_obj.get_name())
+                if ext.lower() != '.pdf':
+                    backend = '--file'
             paths.append(file_obj.get_location().get_path())
 
         if not paths:
             return
 
-        cmd = ['/usr/lib/qubes/qvm-convert-pdf.gnome'] + paths
+        cmd = ['/usr/lib/qubes/qvm-convert-pdf.gnome', backend] + paths
         pid = GLib.spawn_async(cmd)[0]
         GLib.spawn_close_pid(pid)

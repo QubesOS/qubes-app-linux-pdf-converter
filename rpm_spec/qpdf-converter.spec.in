@@ -86,8 +86,10 @@ rm -rf $RPM_BUILD_ROOT
 /usr/bin/qvm-convert-file
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
 /usr/share/file-manager/actions/qvm-convert-pdf-pcmanfm-qt.desktop
+/usr/share/file-manager/actions/qvm-convert-file-pcmanfm-qt.desktop
 %if !0%{?is_opensuse}
 /usr/share/kde4/services/qvm-convert-pdf.desktop
+/usr/share/kde4/services/qvm-convert-file.desktop
 %endif
 %{_mandir}/man1/qvm-convert-pdf.1*
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info

@@ -22,6 +22,12 @@
 
 set -u
 
+backend="--pdf"
+if [ "${1:-}" = "--pdf" ] || [ "${1:-}" = "--file" ]; then
+    backend="$1"
+    shift
+fi
+
 if [ $# -lt 1 ]; then
 exit 1
 fi
@@ -31,10 +37,18 @@ export PROGRESS_FOR_GUI="yes"
 fifo="$(mktemp -u)"
 mkfifo "$fifo" || exit 1
 
-/usr/bin/qvm-convert-pdf "$@" >"$fifo" &
+if [ "$backend" = "--file" ]; then
+    converter="/usr/bin/qvm-convert-file"
+    progress_text="Converting file using Disposable VM..."
+else
+    converter="/usr/bin/qvm-convert-pdf"
+    progress_text="Converting PDF using Disposable VM..."
+fi
+
+"$converter" "$@" >"$fifo" &
 converter_pid="$!"
 
-zenity --progress --text="Converting PDF using Disposable VM..." --auto-close <"$fifo"
+zenity --progress --text="$progress_text" --auto-close <"$fifo"
 zenity_rc="$?"
 
 rm -f -- "$fifo"

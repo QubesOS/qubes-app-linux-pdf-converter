@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Action
+Name=Convert file in disposable qube
+Icon=gtk-convert
+Profiles=on_supported_file;
+
+[X-Action-Profile on_supported_file]
+MimeTypes=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;
+Exec=/usr/lib/qubes/qvm-convert-pdf.gnome --file %F

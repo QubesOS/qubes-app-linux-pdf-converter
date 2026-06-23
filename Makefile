@@ -40,10 +40,12 @@ install-gnome:
 install-kde4:
 	install -d $(DESTDIR)/usr/share/kde4/services
 	install -m 0644 qvm-convert-pdf.desktop $(DESTDIR)/usr/share/kde4/services
+	install -m 0644 qvm-convert-file.desktop $(DESTDIR)/usr/share/kde4/services
 
 install-pcmanfm-qt:
 	install -d $(DESTDIR)/usr/share/file-manager/actions
 	install -m 0644 qvm-convert-pdf-pcmanfm-qt.desktop $(DESTDIR)/usr/share/file-manager/actions
+	install -m 0644 qvm-convert-file-pcmanfm-qt.desktop $(DESTDIR)/usr/share/file-manager/actions
 
 install-dom0:
 	$(PYTHON) setup.py install -O1 --root $(DESTDIR)
