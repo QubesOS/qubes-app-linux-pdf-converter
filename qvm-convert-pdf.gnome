@@ -22,6 +22,8 @@
 
 set -u
 
+LIBREOFFICE_MISSING_EXIT_CODE=64
+
 backend="--pdf"
 if [ "${1:-}" = "--pdf" ] || [ "${1:-}" = "--file" ]; then
     backend="$1"
@@ -60,3 +62,10 @@ if [ "$zenity_rc" -ne 0 ]; then
 fi
 
 wait "$converter_pid"
+converter_rc="$?"
+
+if [ "$converter_rc" -eq "$LIBREOFFICE_MISSING_EXIT_CODE" ]; then
+    zenity --error --text="LibreOffice is required for this file type. Install libreoffice in the relevant template."
+fi
+
+exit "$converter_rc"

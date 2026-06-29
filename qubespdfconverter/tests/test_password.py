@@ -11,11 +11,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+
 from qubespdfconverter.server import (
     BaseFile,
     LibreOfficeDocumentRenderer,
     PdfRenderer,
     create_renderer,
+    LibreOfficeMissingError,
     renderer_name_for_path,
 )
 
@@ -255,6 +258,23 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             with mock.patch("subprocess.run", return_value=mock.Mock()):
                 with self.assertRaises(ValueError):
                     renderer.page_count()
+
+    def test_docx_renderer_reports_missing_libreoffice(self):
+        """Missing LibreOffice is reported as a clear conversion error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.docx")
+            path.write_bytes(b"docx")
+            renderer = LibreOfficeDocumentRenderer(path, resolution=200, suffix=".docx")
+
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+                with self.assertRaisesRegex(
+                    LibreOfficeMissingError, "relevant template"
+                ):
+                    renderer.page_count()
+
+    def test_missing_libreoffice_exit_code_is_nonzero(self):
+        """Missing LibreOffice uses a dedicated failure code."""
+        self.assertGreater(LIBREOFFICE_MISSING_EXIT_CODE, 0)
 
     def test_odt_renderer_uses_odt_extension_for_libreoffice(self):
         """ODT rendering uses the same LibreOffice path with an ODT input."""

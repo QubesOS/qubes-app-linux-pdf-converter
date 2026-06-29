@@ -3,10 +3,13 @@
 import asyncio
 import os
 import signal
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
 
 from qubespdfconverter.client import (
     BadPath,
@@ -82,6 +85,18 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result)
         handled = {call.args[0] for call in add_handler_mock.mock_calls}
         self.assertEqual(handled, {signal.SIGINT, signal.SIGTERM})
+
+    async def test_003_pagenums_propagates_missing_libreoffice_exit_code(self):
+        job = Job(Path("/tmp/test.docx"), 0)
+        proc = DummyProc()
+        proc.returncode = LIBREOFFICE_MISSING_EXIT_CODE
+        proc.stdout.readline = mock.AsyncMock(return_value=b"")
+        job.proc = proc
+
+        with self.assertRaises(subprocess.CalledProcessError) as exc:
+            await job._pagenums()
+
+        self.assertEqual(exc.exception.returncode, LIBREOFFICE_MISSING_EXIT_CODE)
 
 
 class TC_ExpandDir(unittest.TestCase):
