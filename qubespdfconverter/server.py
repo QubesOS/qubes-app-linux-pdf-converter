@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+
 try:
     import magic
 except ImportError:
@@ -95,6 +97,10 @@ def recv_b():
     if not untrusted_data:
         raise EOFError
     return untrusted_data
+
+
+class LibreOfficeMissingError(ValueError):
+    """Raised if LibreOffice is missing in the relevant template."""
 
 
 class PdfRenderer:
@@ -174,7 +180,13 @@ class LibreOfficeDocumentRenderer:
             str(self.path.parent),
             str(document_path),
         ]
-        subprocess.run(cmd, capture_output=True, check=True)
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+        except FileNotFoundError as exc:
+            raise LibreOfficeMissingError(
+                "LibreOffice is required for this file type; "
+                "install libreoffice in the relevant template"
+            ) from exc
 
         pdf_path = document_path.with_suffix(".pdf")
         if not pdf_path.exists():
@@ -422,6 +434,9 @@ def main():
             asyncio.run(base.sanitize())
         except subprocess.CalledProcessError:
             sys.exit(1)
+        except LibreOfficeMissingError as exc:
+            print(f"error: {exc}", file=sys.stderr, flush=True)
+            sys.exit(LIBREOFFICE_MISSING_EXIT_CODE)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr, flush=True)
             sys.exit(1)

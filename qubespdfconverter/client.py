@@ -37,6 +37,8 @@ from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
 
+from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
 MAX_PAGES = 10000
@@ -563,7 +565,17 @@ class Job:
                     raise asyncio.CancelledError
 
                 self.bar.set_job_status(Status.FAIL)
-                await ERROR_LOGS.put(f"{self.path.name}: {e}")
+                if (
+                    isinstance(e, subprocess.CalledProcessError)
+                    and e.returncode == LIBREOFFICE_MISSING_EXIT_CODE
+                ):
+                    error = (
+                        "LibreOffice is required for this file type; "
+                        "install libreoffice in the relevant template"
+                    )
+                    await ERROR_LOGS.put(f"{self.path.name}: {error}")
+                else:
+                    await ERROR_LOGS.put(f"{self.path.name}: {e}")
                 if self.proc.returncode is None:
                     await terminate_proc(self.proc)
                 raise
@@ -668,7 +680,13 @@ class Job:
         """Receive number of pages in original document from server"""
         try:
             untrusted_pagenums = int(await recvline(self.proc))
-        except (AttributeError, EOFError, UnicodeError, ValueError) as e:
+        except EOFError as e:
+            try:
+                await wait_proc(self.proc, CLIENT_VM_CMD)
+            except subprocess.CalledProcessError as proc_exc:
+                raise proc_exc from e
+            raise QrexecError("Failed to receive page count") from e
+        except (AttributeError, UnicodeError, ValueError) as e:
             raise QrexecError("Failed to receive page count") from e
 
         if 1 <= untrusted_pagenums <= MAX_PAGES:
@@ -762,7 +780,14 @@ async def run(params):
     total = len(results) + num_skipped
     print(f"{newlines}Total Sanitized Files:  {completed}/{total}")
 
-    return completed != total
+    if any(
+        isinstance(result, subprocess.CalledProcessError)
+        and result.returncode == LIBREOFFICE_MISSING_EXIT_CODE
+        for result in results
+    ):
+        return LIBREOFFICE_MISSING_EXIT_CODE
+
+    return int(completed != total)
 
 
 @click.command()
