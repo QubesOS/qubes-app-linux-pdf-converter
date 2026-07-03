@@ -28,6 +28,10 @@ Usage
 
     Total Sanitized Files: 2/3
 
+The generic `qvm-convert-file` command also supports LibreOffice-backed
+document and spreadsheet conversion for DOCX, ODT, XLSX, and ODS files. Those
+formats require LibreOffice to be installed in the relevant template.
+
 Authors
 ---------
 

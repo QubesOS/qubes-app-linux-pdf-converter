@@ -10,5 +10,6 @@ usr/share/kde4/services/qvm-convert-file.desktop
 usr/share/file-manager/actions/qvm-convert-pdf-pcmanfm-qt.desktop
 usr/share/file-manager/actions/qvm-convert-file-pcmanfm-qt.desktop
 usr/share/man/man1/qvm-convert-pdf.1.gz
+usr/share/man/man1/qvm-convert-file.1.gz
 usr/lib/python3/dist-packages/qubespdfconverter
 usr/lib/python3/dist-packages/qubespdfconverter-*.egg-info

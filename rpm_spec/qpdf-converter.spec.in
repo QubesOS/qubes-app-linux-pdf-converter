@@ -92,6 +92,7 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/kde4/services/qvm-convert-file.desktop
 %endif
 %{_mandir}/man1/qvm-convert-pdf.1*
+%{_mandir}/man1/qvm-convert-file.1*
 %dir %{python3_sitelib}/qubespdfconverter-*.egg-info
 %{python3_sitelib}/qubespdfconverter-*.egg-info/*
 %{python3_sitelib}/qubespdfconverter
