@@ -28,4 +28,7 @@ Recommends:
  zenity
 Suggests:
  python3-nautilus | python-nautilus,
+ libreoffice,
+ python3-fitz,
+ tesseract-ocr-eng,
 Description: The Qubes service for converting untrusted PDF files into trusted ones
