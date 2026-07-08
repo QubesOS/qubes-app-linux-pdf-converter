@@ -10,6 +10,7 @@ SYNOPSIS
 ========
 :command: `qvm-convert-pdf` [-h] [--batch SIZE] [--archive PATH] [--in-place]
                             [--resolution RESOLUTION] [--password PASSWORD]
+                            [--ocr-lang LANGUAGE]
 
 OPTIONS
 =======
@@ -38,6 +39,11 @@ OPTIONS
 
    Password to use for encrypted PDF files.
 
+.. option:: --ocr-lang=LANGUAGE
+
+   Tesseract language code to use for OCR output. Tesseract uses three-letter
+   language codes such as ``eng`` for English, not two-letter locale codes.
+
 DESCRIPTION
 ===========
 
@@ -54,6 +60,19 @@ then constructs an entirely new PDF file out of the received bitmaps.
 Of course, the price we pay for this conversion is an increase in file size and 
 the loss of any structural information or text-based search in the converted 
 PDF.
+
+If ``--ocr-lang`` is set, the converter adds a searchable text layer to the
+trusted PDF after the pages have been rendered to safe bitmaps. OCR requires
+PyMuPDF and Tesseract language data in the client qube.
+
+For English OCR, install ``python3-fitz`` and ``tesseract-ocr-eng`` on Debian
+templates, or ``python3-PyMuPDF`` and ``tesseract-langpack-eng`` on Fedora
+templates. Other languages use the same Tesseract three-letter language code in
+the package name.
+
+LibreOffice is required only for LibreOffice-backed input formats handled by
+``qvm-convert-file``. Install the ``libreoffice`` package in the relevant
+template to enable those formats.
 
 AUTHORS
 =======

@@ -38,6 +38,7 @@ from PIL import Image
 from tempfile import TemporaryDirectory
 
 from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter import ocr
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
@@ -173,6 +174,13 @@ def validate_paths(ctx, param, untrusted_paths):
         paths.append(resolved)
 
     return tuple(paths)
+
+
+def validate_ocr_lang(ctx, param, language):
+    try:
+        return ocr.validate_language_code(language)
+    except ValueError as e:
+        raise click.BadParameter(str(e)) from e
 
 
 async def cancel_task(task):
@@ -391,7 +399,7 @@ class BaseFile:
 
     output_resolution: int = RESOLUTION
 
-    def __init__(self, path, pagenums, pdf):
+    def __init__(self, path, pagenums, pdf, ocr_lang=None):
         """
         :param path: @path
         :param pagenums: @pagenums
@@ -400,6 +408,9 @@ class BaseFile:
         self.path = path
         self.pagenums = pagenums
         self.pdf = pdf
+        self.ocr_lang = ocr_lang
+        self.ocr_doc = None
+        self.ocr_tessdata_dir = None
         self.batch = None
 
 
@@ -411,12 +422,21 @@ class BaseFile:
         :param in_place: Value of --in-place flag
         """
         self.batch = asyncio.Queue(depth)
+        if self.ocr_lang:
+            self.ocr_tessdata_dir = ocr.check_available(self.ocr_lang)
+            self.ocr_doc = ocr.create_document()
 
         publish_task = asyncio.create_task(self._publish(proc, bar))
         consume_task = asyncio.create_task(self._consume())
 
         try:
             await asyncio.gather(publish_task, consume_task)
+            if self.ocr_doc is not None:
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    self.ocr_doc.save,
+                    self.pdf
+                )
         finally:
             if not publish_task.done():
                 await cancel_task(publish_task)
@@ -428,6 +448,12 @@ class BaseFile:
                 batch_e = await self.batch.get()
                 await cancel_task(batch_e.task)
                 self.batch.task_done()
+
+            if self.ocr_doc is not None:
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    self.ocr_doc.close
+                )
 
 
     async def _publish(self, proc, bar):
@@ -465,6 +491,10 @@ class BaseFile:
 
     async def _save_reps(self, pages):
         """Save final representations to a PDF file"""
+        if self.ocr_lang:
+            await self._save_ocr_reps(pages)
+            return
+
         images = []
 
         for page in pages:
@@ -512,6 +542,40 @@ class BaseFile:
                 )
 
 
+    async def _save_ocr_reps(self, pages):
+        """Save final representations to a searchable PDF document."""
+        for page in pages:
+            png_path = Path(self.pdf.parent, f"{page}.png")
+            try:
+                page_doc = await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    ocr.png_to_pdf_page,
+                    png_path,
+                    self.ocr_lang,
+                    self.ocr_tessdata_dir,
+                    self.output_resolution,
+                )
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    self.ocr_doc.insert_pdf,
+                    page_doc
+                )
+            except (ocr.OcrDependencyError, RuntimeError, ValueError) as e:
+                raise RepresentationError("Failed to OCR representation") from e
+            finally:
+                try:
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        page_doc.close
+                    )
+                except (NameError, AttributeError):
+                    pass
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    png_path.unlink
+                )
+
+
 class Job:
     """A sanitization job
 
@@ -519,7 +583,7 @@ class Job:
     :param pos: Bar position
     """
 
-    def __init__(self, path, pos, password=""):
+    def __init__(self, path, pos, password="", ocr_lang=None):
         """
 
         :param file: Base file
@@ -529,6 +593,7 @@ class Job:
         """
         self.path = path
         self.password = password
+        self.ocr_lang = ocr_lang
         self.bar = Tqdm(desc=f"{path}...0/?",
                         bar_format=" {desc}",
                         position=pos)
@@ -604,7 +669,12 @@ class Job:
             self.bar.refresh()
 
         self.pdf = Path(tmpdir, self.path.with_suffix(".trusted.pdf").name)
-        self.base = BaseFile(self.path, pagenums, self.pdf)
+        self.base = BaseFile(
+            self.path,
+            pagenums,
+            self.pdf,
+            ocr_lang=self.ocr_lang
+        )
 
 
     async def _start(self, archive, depth, in_place):
@@ -728,7 +798,10 @@ async def collect_jobs(params):
                 passwords[path] = password
 
     selected_files = [path for path in params["files"] if path not in skipped_files]
-    jobs = [Job(f, i, passwords[f]) for i, f in enumerate(selected_files)]
+    jobs = [
+        Job(f, i, passwords[f], ocr_lang=params.get("ocr_lang"))
+        for i, f in enumerate(selected_files)
+    ]
     tasks = [
         asyncio.create_task(job.run(params["archive"],
                                     params["batch"],
@@ -739,6 +812,13 @@ async def collect_jobs(params):
 
 
 async def run(params):
+    if params.get("ocr_lang"):
+        try:
+            ocr.check_available(params["ocr_lang"])
+        except ocr.OcrDependencyError as e:
+            logging.error(str(e))
+            return 1
+
     CLIENT_VM_CMD[-1] += "+" + str(params["resolution"])
     BaseFile.output_resolution = params["resolution"]
     suffix = "s" if len(params["files"]) > 1 else ""
@@ -828,6 +908,13 @@ async def run(params):
     default="",
     metavar="PASSWORD",
     help="Password for encrypted PDF files"
+)
+@click.option(
+    "--ocr-lang",
+    default=None,
+    callback=validate_ocr_lang,
+    metavar="LANGUAGE",
+    help="Tesseract language code for OCR output"
 )
 @click.argument(
     "files",

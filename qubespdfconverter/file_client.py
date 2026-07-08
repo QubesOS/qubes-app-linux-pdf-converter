@@ -50,6 +50,13 @@ from qubespdfconverter import client as pdf_client
     metavar="PASSWORD",
     help="Password for encrypted PDF files"
 )
+@click.option(
+    "--ocr-lang",
+    default=None,
+    callback=pdf_client.validate_ocr_lang,
+    metavar="LANGUAGE",
+    help="Tesseract language code for OCR output"
+)
 @click.argument(
     "files",
     type=Path,

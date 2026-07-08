@@ -9,16 +9,21 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import click
+
 from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
 
 from qubespdfconverter.client import (
     BadPath,
+    BaseFile,
     Job,
     PageError,
     expand_dir,
     run,
+    validate_ocr_lang,
     validate_paths,
 )
+from qubespdfconverter.ocr import OcrDependencyError
 
 
 class DummyProc:
@@ -79,6 +84,7 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
                     "archive": Path("/tmp/archive"),
                     "batch": 1,
                     "in_place": False,
+                    "ocr_lang": None,
                 }
             )
 
@@ -97,6 +103,46 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
             await job._pagenums()
 
         self.assertEqual(exc.exception.returncode, LIBREOFFICE_MISSING_EXIT_CODE)
+
+    async def test_004_ocr_dependency_error_stops_before_qrexec(self):
+        with mock.patch(
+            "qubespdfconverter.client.ocr.check_available",
+            side_effect=OcrDependencyError("missing OCR dependency"),
+        ), mock.patch("asyncio.create_subprocess_exec") as create_mock:
+            result = await run(
+                {
+                    "resolution": 300,
+                    "files": [Path("/tmp/test.pdf")],
+                    "archive": Path("/tmp/archive"),
+                    "batch": 1,
+                    "in_place": False,
+                    "ocr_lang": "eng",
+                }
+            )
+
+        self.assertEqual(result, 1)
+        create_mock.assert_not_called()
+
+    async def test_005_ocr_reps_insert_pages_into_ocr_document(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf = Path(tmpdir, "out.pdf")
+            png = Path(tmpdir, "1.png")
+            png.write_bytes(b"png")
+            base = BaseFile(Path("/tmp/test.pdf"), 1, pdf, ocr_lang="eng")
+            base.ocr_doc = mock.Mock()
+            base.ocr_tessdata_dir = Path("/tmp/tessdata")
+            page_doc = mock.Mock()
+
+            with mock.patch(
+                "qubespdfconverter.client.ocr.png_to_pdf_page",
+                return_value=page_doc,
+            ) as ocr_mock:
+                await base._save_ocr_reps([1])
+
+        ocr_mock.assert_called_once_with(png, "eng", Path("/tmp/tessdata"), 300)
+        base.ocr_doc.insert_pdf.assert_called_once_with(page_doc)
+        page_doc.close.assert_called_once()
+        self.assertFalse(png.exists())
 
 
 class TC_ExpandDir(unittest.TestCase):
@@ -198,6 +244,21 @@ class TC_ValidatePaths(unittest.TestCase):
         b = self._touch("b.pdf")
         result = validate_paths(None, None, [a, b])
         self.assertEqual(set(result), {a.resolve(), b.resolve()})
+
+
+class TC_OcrLang(unittest.TestCase):
+    def test_000_empty_language_returns_none(self):
+        self.assertIsNone(validate_ocr_lang(None, None, None))
+
+    def test_001_valid_language_returned(self):
+        self.assertEqual(validate_ocr_lang(None, None, "eng"), "eng")
+
+    def test_002_multiple_languages_returned(self):
+        self.assertEqual(validate_ocr_lang(None, None, "eng+hin"), "eng+hin")
+
+    def test_003_invalid_language_raises_bad_parameter(self):
+        with self.assertRaises(click.BadParameter):
+            validate_ocr_lang(None, None, "eng;rm")
 
 
 if __name__ == "__main__":
