@@ -12,12 +12,14 @@ from unittest import mock
 import click
 
 from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter import ocr_config
 
 from qubespdfconverter.client import (
     BadPath,
     BaseFile,
     Job,
     PageError,
+    apply_ocr_default,
     expand_dir,
     run,
     validate_ocr_lang,
@@ -144,6 +146,21 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         page_doc.close.assert_called_once()
         self.assertFalse(png.exists())
 
+    async def test_006_cli_uses_configured_ocr_default(self):
+        params = {"ocr_lang": None}
+
+        with mock.patch(
+            "qubespdfconverter.client.ocr_config.get_default_ocr_lang",
+            return_value="eng",
+        ), mock.patch(
+            "qubespdfconverter.client.ocr.check_available"
+        ) as check_mock:
+            result = apply_ocr_default(params)
+
+        self.assertTrue(result)
+        self.assertEqual(params["ocr_lang"], "eng")
+        check_mock.assert_called_once_with("eng")
+
 
 class TC_ExpandDir(unittest.TestCase):
     def setUp(self):
@@ -259,6 +276,30 @@ class TC_OcrLang(unittest.TestCase):
     def test_003_invalid_language_raises_bad_parameter(self):
         with self.assertRaises(click.BadParameter):
             validate_ocr_lang(None, None, "eng;rm")
+
+
+class TC_OcrConfig(unittest.TestCase):
+    def test_000_missing_config_disables_ocr(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "missing.conf")
+            self.assertIsNone(ocr_config.read_config(path))
+            self.assertIsNone(ocr_config.get_default_ocr_lang(path))
+
+    def test_001_write_enabled_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "ocr.conf")
+            ocr_config.write_config(True, "eng", path)
+
+            self.assertEqual(ocr_config.read_config(path), (True, "eng"))
+            self.assertEqual(ocr_config.get_default_ocr_lang(path), "eng")
+
+    def test_002_write_disabled_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "ocr.conf")
+            ocr_config.write_config(False, "eng", path)
+
+            self.assertEqual(ocr_config.read_config(path), (False, "eng"))
+            self.assertIsNone(ocr_config.get_default_ocr_lang(path))
 
 
 if __name__ == "__main__":

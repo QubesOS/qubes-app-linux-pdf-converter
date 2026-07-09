@@ -38,7 +38,7 @@ from PIL import Image
 from tempfile import TemporaryDirectory
 
 from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
-from qubespdfconverter import ocr
+from qubespdfconverter import ocr, ocr_config
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
@@ -811,13 +811,24 @@ async def collect_jobs(params):
     return jobs, tasks, len(skipped_files)
 
 
-async def run(params):
+def apply_ocr_default(params):
+    """Use configured OCR settings if no OCR language was passed."""
+    if params.get("ocr_lang") is None:
+        params["ocr_lang"] = ocr_config.get_default_ocr_lang()
+
     if params.get("ocr_lang"):
         try:
             ocr.check_available(params["ocr_lang"])
         except ocr.OcrDependencyError as e:
             logging.error(str(e))
-            return 1
+            return False
+
+    return True
+
+
+async def run(params):
+    if not apply_ocr_default(params):
+        return 1
 
     CLIENT_VM_CMD[-1] += "+" + str(params["resolution"])
     BaseFile.output_resolution = params["resolution"]

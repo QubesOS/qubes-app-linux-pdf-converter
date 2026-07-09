@@ -36,6 +36,8 @@ install-service:
 install-gnome:
 	install -d $(DESTDIR)/usr/share/nautilus-python/extensions
 	install -m 0644 qvm_convert_pdf_nautilus.py $(DESTDIR)/usr/share/nautilus-python/extensions
+	install -d $(DESTDIR)/usr/share/applications
+	install -m 0644 qvm-convert-pdf-ocr-settings.desktop $(DESTDIR)/usr/share/applications
 
 install-kde4:
 	install -d $(DESTDIR)/usr/share/kde4/services
@@ -52,6 +54,7 @@ install-dom0:
 	# not needed in dom0
 	rm -f $(DESTDIR)/usr/bin/qvm-convert-pdf
 	rm -f $(DESTDIR)/usr/bin/qvm-convert-file
+	rm -f $(DESTDIR)/usr/bin/qvm-convert-pdf-ocr-settings
 	rm -f $(DESTDIR)/usr/lib/qubes/qpdf-convert-server
 
 clean:

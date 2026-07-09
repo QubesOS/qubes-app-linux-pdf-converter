@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Qubes PDF converter OCR settings
+Comment=Configure OCR for trusted PDF conversion
+Exec=qvm-convert-pdf-ocr-settings
+Icon=gtk-convert
+Categories=Settings;Utility;

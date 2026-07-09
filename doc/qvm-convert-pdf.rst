@@ -74,6 +74,11 @@ LibreOffice is required only for LibreOffice-backed input formats handled by
 ``qvm-convert-file``. Install the ``libreoffice`` package in the relevant
 template to enable those formats.
 
+If ``--ocr-lang`` is not set, the command uses the OCR setting saved by
+``qvm-convert-pdf-ocr-settings``. The graphical file manager action asks for
+this setting the first time it is used, and the settings tool can be launched
+later from the application menu.
+
 AUTHORS
 =======
 | Joanna Rutkowska <joanna at invisiblethingslab dot com>

@@ -10,7 +10,7 @@ SYNOPSIS
 ========
 :command: `qvm-convert-file` [-h] [--batch SIZE] [--archive PATH] [--in-place]
                              [--resolution RESOLUTION] [--password PASSWORD]
-                             [FILES ...]
+                             [--ocr-lang LANGUAGE] [FILES ...]
 
 OPTIONS
 ========
@@ -39,6 +39,11 @@ OPTIONS
 
    Password to use for encrypted PDF files.
 
+.. option:: --ocr-lang=LANGUAGE
+
+   Tesseract language code to use for OCR output. Tesseract uses three-letter
+   language codes such as ``eng`` for English, not two-letter locale codes.
+
 DESCRIPTION
 ===========
 
@@ -60,6 +65,11 @@ in the relevant template.
 
 As with qvm-convert-pdf, the converted PDF may be larger than the original file
 and may lose structural information such as searchable text.
+
+If ``--ocr-lang`` is set, the converter adds a searchable text layer to the
+trusted PDF after the pages have been rendered to safe bitmaps. If
+``--ocr-lang`` is not set, the command uses the OCR setting saved by
+``qvm-convert-pdf-ocr-settings``.
 
 AUTHORS
 ========
