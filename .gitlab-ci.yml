@@ -5,6 +5,20 @@ checks:pylint:
   script:
   - python3 -m pylint --rcfile=.pylintrc qubespdfconverter
   stage: checks
+checks:tests:
+  stage: checks
+  tags:
+    - docker
+  variables:
+    USER: gitlab-runner
+  before_script:
+    - git config --global --add safe.directory "${CI_PROJECT_DIR}"
+    - pip3 install --quiet -r ci/requirements.txt
+  script:
+    - python3 setup.py build
+    - python3 -m coverage run -m unittest discover -p test_\*.py -v -s qubespdfconverter -t .
+  after_script:
+    - ci/codecov-wrapper
 include:
 - file: /r4.3/gitlab-base.yml
   project: QubesOS/qubes-continuous-integration
