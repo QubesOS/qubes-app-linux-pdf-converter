@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -xe
+
+curl -Os https://uploader.codecov.io/latest/linux/codecov
+curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM
+curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM.sig
+
+sqv --keyring ci/codecov-keys.asc codecov.SHA256SUM.sig codecov.SHA256SUM
+shasum -a 256 -c codecov.SHA256SUM
+
+chmod +x codecov
+
+python3 -m coverage xml || :
+
+if [[ "$CI_COMMIT_BRANCH" =~ ^pr- ]]; then
+    PR=${CI_COMMIT_BRANCH#pr-}
+    parents=$(git show -s --format='%P %ae')
+    if [ $(wc -w <<<"$parents") -eq 3 ] && [ "${parents##* }" = "fepitre-bot@qubes-os.org" ]; then
+        commit_sha=$(cut -f 2 -d ' ' <<<"${parents}")
+    else
+        commit_sha=$(git show -s --format='%H')
+    fi
+    exec ./codecov --pr "$PR" --sha "$commit_sha" "$@"
+fi
+exec ./codecov "$@"
