@@ -397,10 +397,11 @@ parser.add_argument(
     help="Default resolution is 300 ppi",
 )
 
-args = parser.parse_args()
 
 
 def main():
+    args = parser.parse_args()
+
     first_line = sys.stdin.buffer.readline()
 
     # Password is optional. New clients with a password send
