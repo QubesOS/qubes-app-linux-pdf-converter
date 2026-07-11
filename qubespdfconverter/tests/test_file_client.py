@@ -13,7 +13,7 @@ class TC_FileClient(unittest.TestCase):
     def test_uses_pdf_converter_without_client_mime_check(self):
         runner = CliRunner()
 
-        with runner.isolated_filesystem():
+        with runner.isolated_filesystem() as tmpdir:
             Path("report.pdf").write_bytes(b"%PDF-1.7\n")
 
             with mock.patch(
@@ -25,12 +25,12 @@ class TC_FileClient(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         run_mock.assert_awaited_once()
         params = run_mock.await_args.args[0]
-        self.assertEqual(params["files"], (Path("report.pdf"),))
+        self.assertEqual(params["files"], (Path(tmpdir) / "report.pdf",))
 
     def test_extension_is_not_checked_on_client(self):
         runner = CliRunner()
 
-        with runner.isolated_filesystem():
+        with runner.isolated_filesystem() as tmpdir:
             Path("report.docx").write_bytes(b"not a pdf")
 
             with mock.patch(
@@ -42,7 +42,7 @@ class TC_FileClient(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         run_mock.assert_awaited_once()
         params = run_mock.await_args.args[0]
-        self.assertEqual(params["files"], (Path("report.docx"),))
+        self.assertEqual(params["files"], (Path(tmpdir) / "report.docx",))
 
     def test_failed_server_conversion_is_reported(self):
         runner = CliRunner()
