@@ -70,7 +70,7 @@ setup(
     ],
     entry_points={
         'qubes.tests.extra.for_template':
-            'qubespdfconverter = qubespdfconverter.tests:list_tests',
+            'qubespdfconverter = qubespdfconverter.tests.integ:list_tests',
     },
     cmdclass={
        'install': CustomInstall
