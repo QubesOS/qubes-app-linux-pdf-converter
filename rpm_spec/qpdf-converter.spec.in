@@ -87,7 +87,9 @@ rm -rf $RPM_BUILD_ROOT
 /usr/lib/qubes/qvm-convert-pdf.gnome
 /usr/bin/qvm-convert-pdf
 /usr/bin/qvm-convert-file
+/usr/bin/qvm-convert-pdf-ocr-settings
 /usr/share/nautilus-python/extensions/qvm_convert_pdf_nautilus.py*
+/usr/share/applications/qvm-convert-pdf-ocr-settings.desktop
 /usr/share/file-manager/actions/qvm-convert-pdf-pcmanfm-qt.desktop
 /usr/share/file-manager/actions/qvm-convert-file-pcmanfm-qt.desktop
 %if !0%{?is_opensuse}

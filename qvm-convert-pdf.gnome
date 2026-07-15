@@ -47,8 +47,17 @@ else
     progress_text="Converting PDF using Disposable VM..."
 fi
 
-"$converter" "$@" >"$fifo" &
+ocr_args_file="$(mktemp)"
+qvm-convert-pdf-ocr-settings --print-args --configure-missing >"$ocr_args_file"
+ocr_args_rc="$?"
+
+if [ "$ocr_args_rc" -eq 0 ] && [ -s "$ocr_args_file" ]; then
+    "$converter" $(cat "$ocr_args_file") "$@" >"$fifo" &
+else
+    "$converter" "$@" >"$fifo" &
+fi
 converter_pid="$!"
+rm -f -- "$ocr_args_file"
 
 zenity --progress --text="$progress_text" --auto-close <"$fifo"
 zenity_rc="$?"

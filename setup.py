@@ -43,6 +43,10 @@ class CustomInstall(setuptools.command.install.install):
             ('usr/lib/qubes/qpdf-convert-server', 'qubespdfconverter.server'),
             ('usr/bin/qvm-convert-pdf', 'qubespdfconverter.client'),
             ('usr/bin/qvm-convert-file', 'qubespdfconverter.file_client'),
+            (
+                'usr/bin/qvm-convert-pdf-ocr-settings',
+                'qubespdfconverter.ocr_settings'
+            ),
         ]
         for file, pkg in scripts:
             path = os.path.join(self.root, file)
