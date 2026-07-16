@@ -52,6 +52,10 @@ Qubes PDF converter is a Qubes Application that utilizes Qubes' flexible qrexec
 potentially untrusted (e.g. maliciously malformed) PDF files into safe-to-view
 PDF files.
 
+For other supported file types, use ``qvm-convert-file``. It currently handles
+PDF, DOCX, ODT, XLSX, and ODS inputs, with LibreOffice required only for the
+Office document and spreadsheet formats.
+
 This is done by having a Disposable VM render each page of a PDF file into a 
 very simple representation (RGB bitmap) that (presumably) leaves no room for 
 malicious code. This representation is then sent back to the client AppVM which 

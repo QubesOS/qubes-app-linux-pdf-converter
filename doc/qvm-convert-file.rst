@@ -51,10 +51,23 @@ Qubes file converter is a Qubes Application that uses Qubes' flexible qrexec
 (inter-VM communication) infrastructure and Disposable VMs to convert
 potentially untrusted files into safe-to-view PDF files.
 
-The command supports PDF files directly. It also supports DOCX, ODT, XLSX, and
-ODS files by converting them to an intermediate PDF with LibreOffice inside the
-conversion environment, then using the same bitmap-based PDF conversion
-pipeline.
+Supported input formats:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Format
+     - Notes
+   * - PDF
+     - Converted directly with the PDF rendering pipeline.
+   * - DOCX, ODT
+     - Converted through LibreOffice, then through the PDF rendering pipeline.
+   * - XLSX, ODS
+     - Converted through LibreOffice, then through the PDF rendering pipeline.
+
+For LibreOffice-backed formats, the converter first creates an intermediate PDF
+inside the conversion environment, then uses the same bitmap-based PDF
+conversion pipeline.
 
 File type detection is performed on the server side. Unsupported file types are
 rejected instead of being converted.
@@ -70,6 +83,10 @@ If ``--ocr-lang`` is set, the converter adds a searchable text layer to the
 trusted PDF after the pages have been rendered to safe bitmaps. If
 ``--ocr-lang`` is not set, the command uses the OCR setting saved by
 ``qvm-convert-pdf-ocr-settings``.
+
+OCR is optional. For English OCR, install ``python3-fitz`` and
+``tesseract-ocr-eng`` on Debian templates, or ``python3-PyMuPDF`` and
+``tesseract-langpack-eng`` on Fedora templates.
 
 AUTHORS
 ========
