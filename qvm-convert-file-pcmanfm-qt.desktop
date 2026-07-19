@@ -5,5 +5,5 @@ Icon=gtk-convert
 Profiles=on_supported_file;
 
 [X-Action-Profile on_supported_file]
-MimeTypes=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;
+MimeTypes=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;video/mp4;video/ogg;video/quicktime;video/webm;video/x-matroska;video/x-msvideo;
 Exec=/usr/lib/qubes/qvm-convert-pdf.gnome --file %F

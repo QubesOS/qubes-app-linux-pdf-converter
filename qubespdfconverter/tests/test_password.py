@@ -15,8 +15,11 @@ from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
 
 from qubespdfconverter.server import (
     BaseFile,
+    FfmpegMissingError,
     LibreOfficeDocumentRenderer,
     PdfRenderer,
+    VideoFile,
+    VideoRenderer,
     create_renderer,
     LibreOfficeMissingError,
     renderer_name_for_path,
@@ -150,6 +153,13 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(renderer.resolution, 200)
         self.assertEqual(renderer.suffix, ".xlsx")
 
+    def test_create_renderer_returns_video_renderer(self):
+        """The server dispatch table creates the video renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
+            renderer = create_renderer("video", Path(f.name))
+
+        self.assertIsInstance(renderer, VideoRenderer)
+
     def test_create_renderer_rejects_unknown_type(self):
         """Unknown renderer names fail before any conversion starts."""
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
@@ -217,6 +227,16 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             renderer_name = renderer_name_for_path(Path(f.name))
 
         self.assertEqual(renderer_name, "xlsx")
+
+    def test_server_dispatches_mp4_mime_to_video_renderer_name(self):
+        """MP4 MIME detection selects the video renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value="video/mp4",
+        ):
+            renderer_name = renderer_name_for_path(Path(f.name))
+
+        self.assertEqual(renderer_name, "video")
 
     def test_server_rejects_unsupported_mime(self):
         """Unsupported MIME types fail before selecting a renderer."""
@@ -294,6 +314,104 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
 
             with mock.patch("subprocess.run", side_effect=fake_run):
                 self.assertEqual(renderer.page_count(), 2)
+
+    def test_video_renderer_converts_with_ffmpeg(self):
+        """Video rendering decodes to raw RGB frames with FFmpeg."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            output = Path(tmpdir, "trusted.rgb")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            def fake_run(cmd, capture_output, check):
+                if cmd[0] == "ffprobe":
+                    return mock.Mock(
+                        stdout=(
+                            b'{"streams":[{"width":2,"height":2,'
+                            b'"r_frame_rate":"1/1"}]}'
+                        )
+                    )
+
+                self.assertEqual(cmd[0], "ffmpeg")
+                self.assertIn("-map_metadata", cmd)
+                self.assertIn("-1", cmd)
+                self.assertIn("rawvideo", cmd)
+                self.assertIn("rgb24", cmd)
+                self.assertNotIn("libtheora", cmd)
+                output.write_bytes(b"\x00" * 12)
+                return mock.Mock(stdout=b"")
+
+            with mock.patch("subprocess.run", side_effect=fake_run):
+                info = renderer.convert(output)
+
+            self.assertEqual(info.width, 2)
+            self.assertEqual(info.height, 2)
+            self.assertEqual(info.frames, 1)
+            self.assertEqual(output.read_bytes(), b"\x00" * 12)
+
+    def test_video_renderer_reports_missing_ffmpeg(self):
+        """Missing FFmpeg is reported as a clear conversion error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+                with self.assertRaisesRegex(FfmpegMissingError, "relevant template"):
+                    renderer.convert(Path(tmpdir, "trusted.rgb"))
+
+    def test_video_renderer_reports_missing_output(self):
+        """A failed video conversion without output is reported clearly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            output = Path(tmpdir, "trusted.rgb")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            def fake_run(cmd, capture_output, check):
+                if cmd[0] == "ffprobe":
+                    return mock.Mock(
+                        stdout=(
+                            b'{"streams":[{"width":2,"height":2,'
+                            b'"r_frame_rate":"1/1"}]}'
+                        )
+                    )
+                return mock.Mock()
+
+            with mock.patch("subprocess.run", side_effect=fake_run):
+                with self.assertRaisesRegex(ValueError, "did not produce"):
+                    renderer.convert(output)
+
+    def test_video_file_sends_raw_output(self):
+        """VideoFile sends a raw video header and frame bytes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            path.write_bytes(b"video")
+            renderer = mock.Mock()
+
+            def convert(output):
+                output.write_bytes(b"\x00" * 12)
+                return mock.Mock(
+                    pixel_format="rgb24",
+                    width=2,
+                    height=2,
+                    fps_num=1,
+                    fps_den=1,
+                    frames=1,
+                    size=12,
+                )
+
+            renderer.convert.side_effect = convert
+            video = VideoFile(path, renderer)
+
+            with mock.patch("qubespdfconverter.server.send") as send_mock, mock.patch(
+                "qubespdfconverter.server.send_b"
+            ) as send_b_mock:
+                video.sanitize()
+
+        renderer.convert.assert_called_once()
+        send_mock.assert_called_once_with("VIDEO rgb24 2 2 1 1 1 12")
+        send_b_mock.assert_called_once_with(b"\x00" * 12)
 
     def test_ods_renderer_uses_ods_extension_for_libreoffice(self):
         """ODS rendering uses the same LibreOffice path with an ODS input."""

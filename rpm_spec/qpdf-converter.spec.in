@@ -57,6 +57,7 @@ Requires:	python%{python3_pkgversion}-magic
 Requires:	python%{python3_pkgversion}-tqdm
 Recommends:	zenity
 Suggests:	libreoffice
+Suggests:	ffmpeg
 Suggests:	python%{python3_pkgversion}-PyMuPDF
 Suggests:	tesseract-langpack-eng
 

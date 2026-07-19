@@ -17,6 +17,10 @@ depends=(
 )
 optdepends=(
     python-nautilus
+    libreoffice
+    ffmpeg
+    python-pymupdf
+    tesseract-data-eng
 )
 _pkgnvr="${pkgname}-${pkgver}-${pkgrel}"
 source=("${_pkgnvr}.tar.gz")

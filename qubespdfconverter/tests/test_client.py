@@ -11,14 +11,18 @@ from unittest import mock
 
 import click
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
 from qubespdfconverter import ocr_config
 
 from qubespdfconverter.client import (
     BadPath,
     BaseFile,
+    ERROR_LOGS,
     Job,
-    PageError,
+    QrexecError,
     apply_ocr_default,
     expand_dir,
     run,
@@ -26,6 +30,12 @@ from qubespdfconverter.client import (
     validate_paths,
 )
 from qubespdfconverter.ocr import OcrDependencyError
+from qubespdfconverter.protocol import (
+    OutputFileError,
+    PageError,
+    VideoOutput,
+    parse_output_header,
+)
 
 
 class DummyProc:
@@ -94,7 +104,7 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         handled = {call.args[0] for call in add_handler_mock.mock_calls}
         self.assertEqual(handled, {signal.SIGINT, signal.SIGTERM})
 
-    async def test_003_pagenums_propagates_missing_libreoffice_exit_code(self):
+    async def test_003_output_info_propagates_missing_libreoffice_exit_code(self):
         job = Job(Path("/tmp/test.docx"), 0)
         proc = DummyProc()
         proc.returncode = LIBREOFFICE_MISSING_EXIT_CODE
@@ -102,7 +112,7 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         job.proc = proc
 
         with self.assertRaises(subprocess.CalledProcessError) as exc:
-            await job._pagenums()
+            await job._output_info()
 
         self.assertEqual(exc.exception.returncode, LIBREOFFICE_MISSING_EXIT_CODE)
 
@@ -160,6 +170,172 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         self.assertEqual(params["ocr_lang"], "eng")
         check_mock.assert_called_once_with("eng")
+
+    async def test_007_ffmpeg_error_logs_fixed_message(self):
+        while not ERROR_LOGS.empty():
+            ERROR_LOGS.get_nowait()
+            ERROR_LOGS.task_done()
+
+        job = Job(Path("/tmp/test.mp4"), 0)
+        proc = DummyProc()
+
+        with mock.patch(
+            "asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)
+        ):
+            job._setup = mock.AsyncMock(
+                side_effect=subprocess.CalledProcessError(
+                    FFMPEG_MISSING_EXIT_CODE,
+                    "qrexec-client-vm",
+                )
+            )
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                await job.run(Path("/tmp/archive"), depth=1, in_place=False)
+
+        self.assertTrue(proc.terminated)
+        error = await ERROR_LOGS.get()
+        ERROR_LOGS.task_done()
+        self.assertIn("FFmpeg is required for this file type", error)
+        self.assertIn("relevant template", error)
+
+    async def test_008_setup_accepts_video_output_header(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.bar = mock.Mock()
+            job._send = mock.AsyncMock()
+            output = VideoOutput("rgb24", 2, 2, 1, 1, 3, 36)
+            job._output_info = mock.AsyncMock(return_value=output)
+
+            await job._setup(tmpdir)
+
+        self.assertEqual(job.base, output)
+        self.assertEqual(job.output.name, "source.trusted.ogv")
+        job.bar.reset.assert_called_once_with(total=3)
+
+    async def test_009_receive_video_output_encodes_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.base = VideoOutput("rgb24", 1, 1, 1, 1, 1, 3)
+            job.proc = mock.Mock()
+            job.output = Path(tmpdir, "source.trusted.ogv")
+            job.bar = mock.Mock()
+            writer = mock.Mock()
+            writer.is_closing.return_value = False
+            writer.drain = mock.AsyncMock()
+            encoder = mock.Mock()
+            encoder.stdin = writer
+            encoder.returncode = None
+            encoder.wait = mock.AsyncMock(return_value=0)
+            encoder.wait.side_effect = lambda: setattr(encoder, "returncode", 0)
+            job._start_video_encoder = mock.AsyncMock(
+                return_value=(encoder, ["ffmpeg"])
+            )
+            job.output.write_bytes(b"ogv")
+
+            with mock.patch(
+                "qubespdfconverter.client.recv_b",
+                new=mock.AsyncMock(return_value=b"rgb"),
+            ) as recv_mock:
+                await job._receive_video_output()
+
+            recv_mock.assert_awaited_once_with(job.proc, 3)
+            writer.write.assert_called_once_with(b"rgb")
+            writer.drain.assert_awaited_once()
+            writer.close.assert_called_once()
+            self.assertFalse(Path(tmpdir, "source.trusted.rgb").exists())
+            job.bar.update.assert_called_once_with(1)
+            job.bar.set_status.assert_called_once_with("1/1")
+
+    async def test_010_receive_video_output_rejects_short_read(self):
+        job = Job(Path("/tmp/source.mp4"), 0)
+        job.base = VideoOutput("rgb24", 1, 1, 1, 1, 1, 3)
+        job.proc = mock.Mock()
+        job.output = Path("/tmp/source.trusted.ogv")
+        writer = mock.Mock()
+        writer.is_closing.return_value = False
+        encoder = DummyProc()
+        encoder.stdin = writer
+        job._start_video_encoder = mock.AsyncMock(
+            return_value=(encoder, ["ffmpeg"])
+        )
+
+        with mock.patch(
+            "qubespdfconverter.client.recv_b",
+            new=mock.AsyncMock(
+                side_effect=asyncio.IncompleteReadError(b"o", 3)
+            ),
+        ):
+            with self.assertRaises(QrexecError):
+                await job._receive_video_output()
+
+        self.assertTrue(encoder.terminated)
+
+    async def test_011_start_video_encoder_uses_raw_input_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.base = VideoOutput("rgb24", 2, 3, 1, 1, 1, 18)
+            job.output = Path(tmpdir, "source.trusted.ogv")
+            proc = DummyProc()
+            proc.returncode = 0
+
+            with mock.patch(
+                "asyncio.create_subprocess_exec",
+                new=mock.AsyncMock(return_value=proc),
+            ) as exec_mock:
+                await job._start_video_encoder()
+
+        cmd = exec_mock.call_args[0]
+        self.assertIn("rawvideo", cmd)
+        self.assertIn("rgb24", cmd)
+        self.assertIn("2x3", cmd)
+        self.assertEqual(cmd[cmd.index("-i") + 1], "-")
+        self.assertIn("libtheora", cmd)
+
+    async def test_012_start_video_encoder_reports_missing_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.base = VideoOutput("rgb24", 1, 1, 1, 1, 1, 3)
+            job.output = Path(tmpdir, "source.trusted.ogv")
+
+            with mock.patch(
+                "asyncio.create_subprocess_exec",
+                side_effect=FileNotFoundError,
+            ):
+                with self.assertRaises(subprocess.CalledProcessError) as exc:
+                    await job._start_video_encoder()
+
+        self.assertEqual(exc.exception.returncode, FFMPEG_MISSING_EXIT_CODE)
+
+    async def test_013_run_propagates_missing_ffmpeg_exit_code(self):
+        loop = asyncio.get_running_loop()
+
+        async def failed_task():
+            raise subprocess.CalledProcessError(
+                FFMPEG_MISSING_EXIT_CODE,
+                "qrexec-client-vm",
+            )
+
+        with mock.patch(
+            "qubespdfconverter.client.collect_jobs",
+            new=mock.AsyncMock(
+                return_value=([], [asyncio.create_task(failed_task())], 0)
+            ),
+        ), mock.patch(
+            "qubespdfconverter.client.apply_ocr_default",
+            return_value=True,
+        ), mock.patch.object(loop, "add_signal_handler"):
+            result = await run(
+                {
+                    "resolution": 300,
+                    "files": [Path("/tmp/test.mp4")],
+                    "archive": Path("/tmp/archive"),
+                    "batch": 1,
+                    "in_place": False,
+                    "ocr_lang": None,
+                }
+            )
+
+        self.assertEqual(result, FFMPEG_MISSING_EXIT_CODE)
 
 
 class TC_ExpandDir(unittest.TestCase):
@@ -261,6 +437,39 @@ class TC_ValidatePaths(unittest.TestCase):
         b = self._touch("b.pdf")
         result = validate_paths(None, None, [a, b])
         self.assertEqual(set(result), {a.resolve(), b.resolve()})
+
+
+class TC_OutputHeader(unittest.TestCase):
+    def test_000_parse_page_count_header(self):
+        self.assertEqual(parse_output_header("3"), 3)
+
+    def test_001_parse_video_header(self):
+        output = parse_output_header("VIDEO rgb24 2 2 1 1 3 36")
+
+        self.assertEqual(output, VideoOutput("rgb24", 2, 2, 1, 1, 3, 36))
+
+    def test_002_reject_invalid_video_pixel_format(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("VIDEO yuv420p 2 2 1 1 3 36")
+
+    def test_003_reject_invalid_video_size(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("VIDEO rgb24 2 2 1 1 3 35")
+
+    def test_004_reject_malformed_video_header(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("VIDEO rgb24 2 2")
+
+    def test_005_reject_invalid_page_count(self):
+        with self.assertRaises(PageError):
+            parse_output_header("0")
+
+    def test_006_reject_nonnumeric_page_count(self):
+        with self.assertRaises(ValueError):
+            parse_output_header("not-a-page-count")
+
+    def test_007_ffmpeg_exit_code_is_nonzero(self):
+        self.assertGreater(FFMPEG_MISSING_EXIT_CODE, 0)
 
 
 class TC_OcrLang(unittest.TestCase):

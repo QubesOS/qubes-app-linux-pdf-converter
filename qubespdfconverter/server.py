@@ -23,6 +23,7 @@
 import argparse
 import asyncio
 import functools
+import json
 import shutil
 import subprocess
 import sys
@@ -31,7 +32,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
+from qubespdfconverter.protocol import VideoOutput
 
 try:
     import magic
@@ -86,6 +91,16 @@ def send_b(data):
     sys.stdout.buffer.flush()
 
 
+def send_file(path):
+    """Send a file to the client without loading it all into memory."""
+    with path.open("rb") as f:
+        while True:
+            data = f.read(STDIN_READ_SIZE)
+            if not data:
+                break
+            send_b(data)
+
+
 def send(data):
     """Qrexec wrapper for sending text data to the client"""
     print(data, flush=True)
@@ -101,6 +116,10 @@ def recv_b():
 
 class LibreOfficeMissingError(ValueError):
     """Raised if LibreOffice is missing in the relevant template."""
+
+
+class FfmpegMissingError(ValueError):
+    """Raised if FFmpeg is missing in the relevant template."""
 
 
 class PdfRenderer:
@@ -204,11 +223,109 @@ class LibreOfficeDocumentRenderer:
         return await self.pdf_renderer().render_page(page, prefix)
 
 
+class VideoRenderer:
+    """Convert videos to raw RGB frames for the trusted client."""
+
+    pixel_format = "rgb24"
+
+    def __init__(self, path, password=b"", resolution=RESOLUTION):
+        self.path = path
+
+    def _probe(self):
+        """Return basic video stream metadata from FFprobe."""
+        cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            str(self.path),
+        ]
+        try:
+            output = subprocess.run(cmd, capture_output=True, check=True)
+        except FileNotFoundError as exc:
+            raise FfmpegMissingError(
+                "FFmpeg is required for this file type; "
+                "install ffmpeg in the relevant template"
+            ) from exc
+
+        try:
+            stream = json.loads(output.stdout.decode())["streams"][0]
+            width = int(stream["width"])
+            height = int(stream["height"])
+            fps_num, fps_den = map(int, stream["r_frame_rate"].split("/", 1))
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ValueError("failed to read video metadata") from exc
+
+        if not width or not height or not fps_num or not fps_den:
+            raise ValueError("invalid video metadata")
+
+        return width, height, fps_num, fps_den
+
+    def convert(self, output):
+        """Decode the video stream to raw RGB frames."""
+        width, height, fps_num, fps_den = self._probe()
+        cmd = [
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(self.path),
+            "-map",
+            "0:v:0",
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
+            "-an",
+            "-sn",
+            "-dn",
+            "-pix_fmt",
+            self.pixel_format,
+            "-f",
+            "rawvideo",
+            str(output),
+        ]
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+        except FileNotFoundError as exc:
+            raise FfmpegMissingError(
+                "FFmpeg is required for this file type; "
+                "install ffmpeg in the relevant template"
+            ) from exc
+
+        if not output.exists():
+            raise ValueError("video conversion did not produce an output file")
+
+        size = output.stat().st_size
+        frame_size = width * height * 3
+        if not size or size % frame_size:
+            raise ValueError("video conversion produced invalid raw frame data")
+
+        return VideoOutput(
+            self.pixel_format,
+            width,
+            height,
+            fps_num,
+            fps_den,
+            size // frame_size,
+            size,
+        )
+
+
 RENDERERS = {
     "docx": functools.partial(LibreOfficeDocumentRenderer, suffix=".docx"),
     "ods": functools.partial(LibreOfficeDocumentRenderer, suffix=".ods"),
     "odt": functools.partial(LibreOfficeDocumentRenderer, suffix=".odt"),
     "pdf": PdfRenderer,
+    "video": VideoRenderer,
     "xlsx": functools.partial(LibreOfficeDocumentRenderer, suffix=".xlsx"),
 }
 
@@ -218,6 +335,12 @@ MIME_DISPATCH = {
     "application/vnd.oasis.opendocument.spreadsheet": "ods",
     "application/vnd.oasis.opendocument.text": "odt",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "video/mp4": "video",
+    "video/ogg": "video",
+    "video/quicktime": "video",
+    "video/webm": "video",
+    "video/x-matroska": "video",
+    "video/x-msvideo": "video",
 }
 
 
@@ -384,6 +507,27 @@ class BaseFile:
             self.batch.task_done()
 
 
+class VideoFile:
+    """Unsanitized video converted to raw frames."""
+
+    def __init__(self, path, renderer):
+        self.path = path
+        self.renderer = renderer
+
+    def sanitize(self):
+        """Convert and send raw video frames to the client."""
+        output = self.path.with_suffix(".rgb")
+        info = self.renderer.convert(output)
+        send(
+            "VIDEO "
+            f"{info.pixel_format} "
+            f"{info.width} {info.height} "
+            f"{info.fps_num} {info.fps_den} "
+            f"{info.frames} {info.size}"
+        )
+        send_file(output)
+
+
 parser = argparse.ArgumentParser(
     prog="qubes.PdfConvert",
     description="Server side of qvm-convert-pdf",
@@ -425,16 +569,24 @@ def main():
         pdf_path.write_bytes(data)
 
         try:
+            renderer_name = renderer_name_for_path(pdf_path)
             renderer = create_renderer(
-                renderer_name_for_path(pdf_path),
+                renderer_name,
                 pdf_path,
                 password,
                 args.resolution,
             )
-            base = BaseFile(pdf_path, renderer)
-            asyncio.run(base.sanitize())
+            if isinstance(renderer, VideoRenderer):
+                base = VideoFile(pdf_path, renderer)
+                base.sanitize()
+            else:
+                base = BaseFile(pdf_path, renderer)
+                asyncio.run(base.sanitize())
         except subprocess.CalledProcessError:
             sys.exit(1)
+        except FfmpegMissingError as exc:
+            print(f"error: {exc}", file=sys.stderr, flush=True)
+            sys.exit(FFMPEG_MISSING_EXIT_CODE)
         except LibreOfficeMissingError as exc:
             print(f"error: {exc}", file=sys.stderr, flush=True)
             sys.exit(LIBREOFFICE_MISSING_EXIT_CODE)

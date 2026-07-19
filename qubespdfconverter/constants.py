@@ -4,3 +4,4 @@
 """Shared constants for converter clients and server."""
 
 LIBREOFFICE_MISSING_EXIT_CODE = 64
+FFMPEG_MISSING_EXIT_CODE = 65

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-lines
 
 # The Qubes OS Project, http://www.qubes-os.org
 #
@@ -37,18 +38,36 @@ from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
 from qubespdfconverter import ocr, ocr_config
+from qubespdfconverter.protocol import (
+    OutputFileError,
+    PageError,
+    VideoOutput,
+    parse_output_header,
+)
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
-MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
 DEPTH = 8
 RESOLUTION = 300
+STDIN_READ_SIZE = 65536
+VIDEO_OUTPUT_SUFFIX = "ogv"
 
 ERROR_LOGS = asyncio.Queue()
+
+
+def unlink(path):
+    """Wrapper for pathlib.Path.unlink(path, missing_ok=True)"""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
 
 
 class Status(Enum):
@@ -68,10 +87,6 @@ class ImageDimensions:
 
 class DimensionError(ValueError):
     """Raised if invalid image dimensions were received"""
-
-
-class PageError(ValueError):
-    """Raised if an invalid number of pages was received"""
 
 
 class QrexecError(Exception):
@@ -589,7 +604,7 @@ class Job:
         :param file: Base file
         :param bar: Progress bar
         :param proc: qrexec-client-vm process
-        :param pdf: Path to temporary PDF for appending representations
+        :param output: Path to temporary output file
         """
         self.path = path
         self.password = password
@@ -599,7 +614,7 @@ class Job:
                         position=pos)
         self.base = None
         self.proc = None
-        self.pdf = None
+        self.output = None
 
     async def run(self, archive, depth, in_place):
         self.proc = await asyncio.create_subprocess_exec(
@@ -616,6 +631,7 @@ class Job:
                     PageError,
                     QrexecError,
                     DimensionError,
+                    OutputFileError,
                     RepresentationError,
                     subprocess.CalledProcessError) as e:
                 # Since the qrexec-client-vm subprocesses belong to the same
@@ -639,6 +655,15 @@ class Job:
                         "install libreoffice in the relevant template"
                     )
                     await ERROR_LOGS.put(f"{self.path.name}: {error}")
+                elif (
+                    isinstance(e, subprocess.CalledProcessError)
+                    and e.returncode == FFMPEG_MISSING_EXIT_CODE
+                ):
+                    error = (
+                        "FFmpeg is required for this file type; "
+                        "install ffmpeg in the relevant template"
+                    )
+                    await ERROR_LOGS.put(f"{self.path.name}: {error}")
                 else:
                     await ERROR_LOGS.put(f"{self.path.name}: {e}")
                 if self.proc.returncode is None:
@@ -655,44 +680,58 @@ class Job:
 
     async def _setup(self, tmpdir):
         send_task = asyncio.create_task(self._send())
-        page_task = asyncio.create_task(self._pagenums())
+        header_task = asyncio.create_task(self._output_info())
 
         try:
-            _, pagenums = await asyncio.gather(send_task, page_task)
+            _, output_info = await asyncio.gather(send_task, header_task)
         except QrexecError:
-            await cancel_task(page_task)
+            await cancel_task(header_task)
             raise
+
+        if isinstance(output_info, VideoOutput):
+            self.base = output_info
+            self.bar.reset(total=output_info.frames)
+            self.output = Path(
+                tmpdir,
+                self.path.with_suffix(f".trusted.{VIDEO_OUTPUT_SUFFIX}").name
+            )
+            return
+
+        pagenums = output_info
         try:
             self.bar.reset(total=pagenums)
         except AttributeError:
             self.bar.total = pagenums
             self.bar.refresh()
 
-        self.pdf = Path(tmpdir, self.path.with_suffix(".trusted.pdf").name)
+        self.output = Path(tmpdir, self.path.with_suffix(".trusted.pdf").name)
         self.base = BaseFile(
             self.path,
             pagenums,
-            self.pdf,
+            self.output,
             ocr_lang=self.ocr_lang
         )
 
 
     async def _start(self, archive, depth, in_place):
-        await self.base.sanitize(
-            self.proc,
-            self.bar,
-            depth
-        )
+        if isinstance(self.base, VideoOutput):
+            await self._receive_video_output()
+        else:
+            await self.base.sanitize(
+                self.proc,
+                self.bar,
+                depth
+            )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
-        if self.password:
+        if self.password and not isinstance(self.base, VideoOutput):
             await self._reencrypt()
 
         await asyncio.get_running_loop().run_in_executor(
             None,
             shutil.move,
-            self.pdf,
-            Path(self.path.parent, self.pdf.name)
+            self.output,
+            Path(self.path.parent, self.output.name)
         )
 
         if in_place:
@@ -713,11 +752,11 @@ class Job:
 
     async def _reencrypt(self):
         """Re-encrypt the trusted PDF with the original password using qpdf"""
-        encrypted = self.pdf.with_suffix(".enc.pdf")
+        encrypted = self.output.with_suffix(".enc.pdf")
         cmd = [
             "qpdf",
             "--encrypt", self.password, self.password, "256", "--",
-            str(self.pdf),
+            str(self.output),
             str(encrypted),
         ]
         proc = await asyncio.create_subprocess_exec(*cmd)
@@ -726,7 +765,7 @@ class Job:
         except subprocess.CalledProcessError as e:
             raise RepresentationError("Failed to re-encrypt PDF") from e
         await asyncio.get_running_loop().run_in_executor(
-            None, encrypted.replace, self.pdf
+            None, encrypted.replace, self.output
         )
 
 
@@ -746,31 +785,124 @@ class Job:
         self.proc.stdin.write_eof()
 
 
-    async def _pagenums(self):
-        """Receive number of pages in original document from server"""
+    async def _output_info(self):
+        """Receive trusted output information from the server."""
         try:
-            untrusted_pagenums = int(await recvline(self.proc))
+            return parse_output_header(await recvline(self.proc))
         except EOFError as e:
             try:
                 await wait_proc(self.proc, CLIENT_VM_CMD)
             except subprocess.CalledProcessError as proc_exc:
                 raise proc_exc from e
-            raise QrexecError("Failed to receive page count") from e
+            raise QrexecError("Failed to receive output information") from e
         except (AttributeError, UnicodeError, ValueError) as e:
             raise QrexecError("Failed to receive page count") from e
-
-        if 1 <= untrusted_pagenums <= MAX_PAGES:
-            pagenums = untrusted_pagenums
-        else:
-            raise PageError("Invalid page count")
-
-        return pagenums
 
 
     def _archive(self, archive):
         """Move original file into an archival directory"""
         Path.mkdir(archive, exist_ok=True)
         self.path.rename(Path(archive, self.path.name))
+
+
+    async def _receive_video_output(self):
+        """Receive raw video frames and encode a trusted video file."""
+        encoder, cmd = await self._start_video_encoder()
+        try:
+            await self._pipe_video_frames(encoder)
+        except (asyncio.CancelledError, QrexecError, RepresentationError):
+            if encoder.stdin is not None and not encoder.stdin.is_closing():
+                encoder.stdin.close()
+            if encoder.returncode is None:
+                await terminate_proc(encoder)
+            raise
+        finally:
+            if encoder.stdin is not None and not encoder.stdin.is_closing():
+                encoder.stdin.close()
+
+        try:
+            await wait_proc(encoder, cmd)
+        except subprocess.CalledProcessError as e:
+            raise RepresentationError("Failed to encode video") from e
+
+        if not self.output.exists():
+            raise RepresentationError("Failed to encode video")
+
+
+    async def _start_video_encoder(self):
+        """Start FFmpeg for writing the trusted video output."""
+        cmd = [
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            self.base.pixel_format,
+            "-s",
+            f"{self.base.width}x{self.base.height}",
+            "-framerate",
+            f"{self.base.fps_num}/{self.base.fps_den}",
+            "-i",
+            "-",
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
+            "-an",
+            "-sn",
+            "-dn",
+            "-c:v",
+            "libtheora",
+            "-f",
+            "ogg",
+            str(self.output),
+        ]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as e:
+            raise subprocess.CalledProcessError(
+                FFMPEG_MISSING_EXIT_CODE,
+                cmd,
+            ) from e
+        return proc, cmd
+
+
+    async def _pipe_video_frames(self, encoder):
+        """Pipe raw frames from qrexec to FFmpeg without buffering all frames."""
+        remaining = self.base.size
+        frame_size = self.base.width * self.base.height * 3
+        completed_frames = 0
+
+        while remaining:
+            read_size = min(STDIN_READ_SIZE, remaining)
+            try:
+                data = await recv_b(self.proc, read_size)
+            except asyncio.IncompleteReadError as e:
+                raise QrexecError("Received inconsistent number of bytes") from e
+
+            try:
+                encoder.stdin.write(data)
+                await encoder.stdin.drain()
+            except (AttributeError, BrokenPipeError, ConnectionResetError) as e:
+                raise RepresentationError("Failed to encode video") from e
+
+            remaining -= len(data)
+            new_completed_frames = (
+                self.base.size - remaining
+            ) // frame_size
+            if new_completed_frames > completed_frames:
+                self.bar.update(new_completed_frames - completed_frames)
+                self.bar.set_status(
+                    f"{new_completed_frames}/{self.base.frames}"
+                )
+                completed_frames = new_completed_frames
 
 
 async def collect_jobs(params):
@@ -877,6 +1009,13 @@ async def run(params):
         for result in results
     ):
         return LIBREOFFICE_MISSING_EXIT_CODE
+
+    if any(
+        isinstance(result, subprocess.CalledProcessError)
+        and result.returncode == FFMPEG_MISSING_EXIT_CODE
+        for result in results
+    ):
+        return FFMPEG_MISSING_EXIT_CODE
 
     return int(completed != total)
 
