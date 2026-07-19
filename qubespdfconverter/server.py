@@ -31,7 +31,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
 
 try:
     import magic
@@ -101,6 +104,10 @@ def recv_b():
 
 class LibreOfficeMissingError(ValueError):
     """Raised if LibreOffice is missing in the relevant template."""
+
+
+class FfmpegMissingError(ValueError):
+    """Raised if FFmpeg is missing in the relevant template."""
 
 
 class PdfRenderer:
@@ -204,11 +211,61 @@ class LibreOfficeDocumentRenderer:
         return await self.pdf_renderer().render_page(page, prefix)
 
 
+class VideoRenderer:
+    """Convert videos to a trusted Ogg/Theora/Vorbis output file."""
+
+    suffix = "ogv"
+
+    def __init__(self, path, password=b"", resolution=RESOLUTION):
+        self.path = path
+
+    def convert(self, output):
+        """Re-encode a video through FFmpeg into a trusted container."""
+        cmd = [
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(self.path),
+            "-map",
+            "0:v:0?",
+            "-map",
+            "0:a:0?",
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
+            "-sn",
+            "-dn",
+            "-c:v",
+            "libtheora",
+            "-c:a",
+            "libvorbis",
+            "-f",
+            "ogg",
+            str(output),
+        ]
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+        except FileNotFoundError as exc:
+            raise FfmpegMissingError(
+                "FFmpeg is required for this file type; "
+                "install ffmpeg in the relevant template"
+            ) from exc
+
+        if not output.exists():
+            raise ValueError("video conversion did not produce an output file")
+
+
 RENDERERS = {
     "docx": functools.partial(LibreOfficeDocumentRenderer, suffix=".docx"),
     "ods": functools.partial(LibreOfficeDocumentRenderer, suffix=".ods"),
     "odt": functools.partial(LibreOfficeDocumentRenderer, suffix=".odt"),
     "pdf": PdfRenderer,
+    "video": VideoRenderer,
     "xlsx": functools.partial(LibreOfficeDocumentRenderer, suffix=".xlsx"),
 }
 
@@ -218,6 +275,12 @@ MIME_DISPATCH = {
     "application/vnd.oasis.opendocument.spreadsheet": "ods",
     "application/vnd.oasis.opendocument.text": "odt",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "video/mp4": "video",
+    "video/ogg": "video",
+    "video/quicktime": "video",
+    "video/webm": "video",
+    "video/x-matroska": "video",
+    "video/x-msvideo": "video",
 }
 
 
@@ -384,6 +447,21 @@ class BaseFile:
             self.batch.task_done()
 
 
+class TrustedFile:
+    """Unsanitized file converted to another trusted file format."""
+
+    def __init__(self, path, renderer):
+        self.path = path
+        self.renderer = renderer
+
+    def sanitize(self):
+        """Convert and send the trusted output file to the client."""
+        output = self.path.with_suffix(f".{self.renderer.suffix}")
+        self.renderer.convert(output)
+        send(f"FILE {self.renderer.suffix} {output.stat().st_size}")
+        send_b(output.read_bytes())
+
+
 parser = argparse.ArgumentParser(
     prog="qubes.PdfConvert",
     description="Server side of qvm-convert-pdf",
@@ -425,16 +503,24 @@ def main():
         pdf_path.write_bytes(data)
 
         try:
+            renderer_name = renderer_name_for_path(pdf_path)
             renderer = create_renderer(
-                renderer_name_for_path(pdf_path),
+                renderer_name,
                 pdf_path,
                 password,
                 args.resolution,
             )
-            base = BaseFile(pdf_path, renderer)
-            asyncio.run(base.sanitize())
+            if isinstance(renderer, VideoRenderer):
+                base = TrustedFile(pdf_path, renderer)
+                base.sanitize()
+            else:
+                base = BaseFile(pdf_path, renderer)
+                asyncio.run(base.sanitize())
         except subprocess.CalledProcessError:
             sys.exit(1)
+        except FfmpegMissingError as exc:
+            print(f"error: {exc}", file=sys.stderr, flush=True)
+            sys.exit(FFMPEG_MISSING_EXIT_CODE)
         except LibreOfficeMissingError as exc:
             print(f"error: {exc}", file=sys.stderr, flush=True)
             sys.exit(LIBREOFFICE_MISSING_EXIT_CODE)

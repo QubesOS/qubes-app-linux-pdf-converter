@@ -53,8 +53,9 @@ potentially untrusted (e.g. maliciously malformed) PDF files into safe-to-view
 PDF files.
 
 For other supported file types, use ``qvm-convert-file``. It currently handles
-PDF, DOCX, ODT, XLSX, and ODS inputs, with LibreOffice required only for the
-Office document and spreadsheet formats.
+PDF, DOCX, ODT, XLSX, ODS, and common video inputs. LibreOffice is required
+only for the Office document and spreadsheet formats, and FFmpeg is required
+only for video formats.
 
 This is done by having a Disposable VM render each page of a PDF file into a 
 very simple representation (RGB bitmap) that (presumably) leaves no room for 

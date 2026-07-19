@@ -281,6 +281,32 @@ with zipfile.ZipFile(filename, "w") as ods:
         if p.returncode != 0:
             self.skipTest('failed to create test ods: {}'.format(stdout))
 
+    def create_video(self, filename):
+        '''Create a tiny video file from generated frames
+
+        :param filename: output filename
+        '''
+        for frame_no in range(3):
+            p = self.vm.run(
+                'cat > /tmp/video-frame{no:04}.svg && '
+                'gm convert /tmp/video-frame{no:04}.svg '
+                '/tmp/video-frame{no:04}.png 2>&1'.format(no=frame_no),
+                passio_popen=True)
+            (stdout, _) = p.communicate(self.circle_svg.format(
+                text='Frame {}'.format(frame_no + 1)).encode())
+            if p.returncode != 0:
+                self.skipTest(
+                    'failed to create test video frame: {}'.format(stdout))
+
+        p = self.vm.run(
+            'ffmpeg -nostdin -hide_banner -loglevel error -y '
+            '-framerate 1 -i /tmp/video-frame%04d.png -frames:v 3 '
+            '-pix_fmt yuv420p -c:v mpeg4 "{}" 2>&1'.format(filename),
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        if p.returncode != 0:
+            self.skipTest('failed to create test video: {}'.format(stdout))
+
     def get_pdfinfo(self, filename):
         p = self.vm.run('pdfinfo "{}"'.format(filename), passio_popen=True)
         (stdout, _) = p.communicate()
@@ -453,6 +479,24 @@ with zipfile.ZipFile(filename, "w") as ods:
             self.vm.run('test -r "QubesUntrustedPDFs/test.ods"', wait=True), 0)
         self.assertEqual(self.vm.run(
             'diff "orig.ods" "QubesUntrustedPDFs/test.ods"', wait=True), 0)
+
+    def test_009_video(self):
+        if self.vm.run('command -v ffmpeg >/dev/null', wait=True) != 0:
+            self.skipTest('ffmpeg not installed')
+        self.create_video('test.mp4')
+        p = self.vm.run(
+            'cp test.mp4 orig.mp4; qvm-convert-file test.mp4 2>&1',
+            passio_popen=True)
+        (stdout, _) = p.communicate()
+        self.assertEqual(
+            p.returncode, 0, 'qvm-convert-file failed: {}'.format(stdout))
+        self.assertEqual(
+            self.vm.run('test -r "test.trusted.ogv"', wait=True), 0)
+
+        self.assertEqual(
+            self.vm.run('test -r "QubesUntrustedPDFs/test.mp4"', wait=True), 0)
+        self.assertEqual(self.vm.run(
+            'diff "orig.mp4" "QubesUntrustedPDFs/test.mp4"', wait=True), 0)
 
 
 def list_tests():
