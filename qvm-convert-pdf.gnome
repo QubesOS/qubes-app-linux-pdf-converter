@@ -23,6 +23,7 @@
 set -u
 
 LIBREOFFICE_MISSING_EXIT_CODE=64
+FFMPEG_MISSING_EXIT_CODE=65
 
 backend="--pdf"
 if [ "${1:-}" = "--pdf" ] || [ "${1:-}" = "--file" ]; then
@@ -75,6 +76,9 @@ converter_rc="$?"
 
 if [ "$converter_rc" -eq "$LIBREOFFICE_MISSING_EXIT_CODE" ]; then
     zenity --error --text="LibreOffice is required for this file type. Install libreoffice in the relevant template."
+fi
+if [ "$converter_rc" -eq "$FFMPEG_MISSING_EXIT_CODE" ]; then
+    zenity --error --text="FFmpeg is required for this file type. Install ffmpeg in the relevant template."
 fi
 
 exit "$converter_rc"

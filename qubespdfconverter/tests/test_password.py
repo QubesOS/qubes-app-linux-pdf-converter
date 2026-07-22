@@ -15,8 +15,11 @@ from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
 
 from qubespdfconverter.server import (
     BaseFile,
+    FfmpegMissingError,
     LibreOfficeDocumentRenderer,
     PdfRenderer,
+    TrustedFile,
+    VideoRenderer,
     create_renderer,
     LibreOfficeMissingError,
     renderer_name_for_path,
@@ -150,6 +153,14 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(renderer.resolution, 200)
         self.assertEqual(renderer.suffix, ".xlsx")
 
+    def test_create_renderer_returns_video_renderer(self):
+        """The server dispatch table creates the video renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
+            renderer = create_renderer("video", Path(f.name))
+
+        self.assertIsInstance(renderer, VideoRenderer)
+        self.assertEqual(renderer.suffix, "ogv")
+
     def test_create_renderer_rejects_unknown_type(self):
         """Unknown renderer names fail before any conversion starts."""
         with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
@@ -217,6 +228,16 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
             renderer_name = renderer_name_for_path(Path(f.name))
 
         self.assertEqual(renderer_name, "xlsx")
+
+    def test_server_dispatches_mp4_mime_to_video_renderer_name(self):
+        """MP4 MIME detection selects the video renderer."""
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f, mock.patch(
+            "qubespdfconverter.server.detect_mime",
+            return_value="video/mp4",
+        ):
+            renderer_name = renderer_name_for_path(Path(f.name))
+
+        self.assertEqual(renderer_name, "video")
 
     def test_server_rejects_unsupported_mime(self):
         """Unsupported MIME types fail before selecting a renderer."""
@@ -294,6 +315,74 @@ class TC_ServerPassword(unittest.IsolatedAsyncioTestCase):
 
             with mock.patch("subprocess.run", side_effect=fake_run):
                 self.assertEqual(renderer.page_count(), 2)
+
+    def test_video_renderer_converts_with_ffmpeg(self):
+        """Video rendering re-encodes through FFmpeg."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            output = Path(tmpdir, "trusted.ogv")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            def fake_run(cmd, capture_output, check):
+                self.assertEqual(cmd[0], "ffmpeg")
+                self.assertIn("-map_metadata", cmd)
+                self.assertIn("-1", cmd)
+                self.assertIn("libtheora", cmd)
+                self.assertIn("libvorbis", cmd)
+                output.write_bytes(b"ogv")
+                return mock.Mock(stdout=b"")
+
+            with mock.patch("subprocess.run", side_effect=fake_run):
+                renderer.convert(output)
+
+            self.assertEqual(output.read_bytes(), b"ogv")
+
+    def test_video_renderer_reports_missing_ffmpeg(self):
+        """Missing FFmpeg is reported as a clear conversion error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+                with self.assertRaisesRegex(FfmpegMissingError, "relevant template"):
+                    renderer.convert(Path(tmpdir, "trusted.ogv"))
+
+    def test_video_renderer_reports_missing_output(self):
+        """A failed video conversion without output is reported clearly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            output = Path(tmpdir, "trusted.ogv")
+            path.write_bytes(b"video")
+            renderer = VideoRenderer(path)
+
+            with mock.patch("subprocess.run", return_value=mock.Mock()):
+                with self.assertRaisesRegex(ValueError, "did not produce"):
+                    renderer.convert(output)
+
+    def test_trusted_file_sends_converted_output(self):
+        """TrustedFile sends a file header and converted bytes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir, "source.mp4")
+            path.write_bytes(b"video")
+            renderer = mock.Mock()
+            renderer.suffix = "ogv"
+
+            def convert(output):
+                output.write_bytes(b"ogv")
+
+            renderer.convert.side_effect = convert
+            trusted = TrustedFile(path, renderer)
+
+            with mock.patch("qubespdfconverter.server.send") as send_mock, mock.patch(
+                "qubespdfconverter.server.send_b"
+            ) as send_b_mock:
+                trusted.sanitize()
+
+        renderer.convert.assert_called_once()
+        send_mock.assert_called_once_with("FILE ogv 3")
+        send_b_mock.assert_called_once_with(b"ogv")
 
     def test_ods_renderer_uses_ods_extension_for_libreoffice(self):
         """ODS rendering uses the same LibreOffice path with an ODS input."""

@@ -37,12 +37,20 @@ from pathlib import Path
 from PIL import Image
 from tempfile import TemporaryDirectory
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
 from qubespdfconverter import ocr, ocr_config
+from qubespdfconverter.protocol import (
+    OutputFileError,
+    PageError,
+    TrustedOutput,
+    parse_output_header,
+)
 
 CLIENT_VM_CMD = ["/usr/bin/qrexec-client-vm", "@dispvm", "qubes.PdfConvert"]
 
-MAX_PAGES = 10000
 MAX_IMG_WIDTH = 10000
 MAX_IMG_HEIGHT = 10000
 DEPTH = 8
@@ -68,10 +76,6 @@ class ImageDimensions:
 
 class DimensionError(ValueError):
     """Raised if invalid image dimensions were received"""
-
-
-class PageError(ValueError):
-    """Raised if an invalid number of pages was received"""
 
 
 class QrexecError(Exception):
@@ -616,6 +620,7 @@ class Job:
                     PageError,
                     QrexecError,
                     DimensionError,
+                    OutputFileError,
                     RepresentationError,
                     subprocess.CalledProcessError) as e:
                 # Since the qrexec-client-vm subprocesses belong to the same
@@ -639,6 +644,15 @@ class Job:
                         "install libreoffice in the relevant template"
                     )
                     await ERROR_LOGS.put(f"{self.path.name}: {error}")
+                elif (
+                    isinstance(e, subprocess.CalledProcessError)
+                    and e.returncode == FFMPEG_MISSING_EXIT_CODE
+                ):
+                    error = (
+                        "FFmpeg is required for this file type; "
+                        "install ffmpeg in the relevant template"
+                    )
+                    await ERROR_LOGS.put(f"{self.path.name}: {error}")
                 else:
                     await ERROR_LOGS.put(f"{self.path.name}: {e}")
                 if self.proc.returncode is None:
@@ -655,13 +669,24 @@ class Job:
 
     async def _setup(self, tmpdir):
         send_task = asyncio.create_task(self._send())
-        page_task = asyncio.create_task(self._pagenums())
+        header_task = asyncio.create_task(self._output_info())
 
         try:
-            _, pagenums = await asyncio.gather(send_task, page_task)
+            _, output_info = await asyncio.gather(send_task, header_task)
         except QrexecError:
-            await cancel_task(page_task)
+            await cancel_task(header_task)
             raise
+
+        if isinstance(output_info, TrustedOutput):
+            self.base = output_info
+            self.bar.reset(total=1)
+            self.pdf = Path(
+                tmpdir,
+                self.path.with_suffix(f".trusted.{output_info.suffix}").name
+            )
+            return
+
+        pagenums = output_info
         try:
             self.bar.reset(total=pagenums)
         except AttributeError:
@@ -678,14 +703,17 @@ class Job:
 
 
     async def _start(self, archive, depth, in_place):
-        await self.base.sanitize(
-            self.proc,
-            self.bar,
-            depth
-        )
+        if isinstance(self.base, TrustedOutput):
+            await self._receive_trusted_output()
+        else:
+            await self.base.sanitize(
+                self.proc,
+                self.bar,
+                depth
+            )
         await wait_proc(self.proc, CLIENT_VM_CMD)
 
-        if self.password:
+        if self.password and not isinstance(self.base, TrustedOutput):
             await self._reencrypt()
 
         await asyncio.get_running_loop().run_in_executor(
@@ -746,31 +774,40 @@ class Job:
         self.proc.stdin.write_eof()
 
 
-    async def _pagenums(self):
-        """Receive number of pages in original document from server"""
+    async def _output_info(self):
+        """Receive trusted output information from the server."""
         try:
-            untrusted_pagenums = int(await recvline(self.proc))
+            return parse_output_header(await recvline(self.proc))
         except EOFError as e:
             try:
                 await wait_proc(self.proc, CLIENT_VM_CMD)
             except subprocess.CalledProcessError as proc_exc:
                 raise proc_exc from e
-            raise QrexecError("Failed to receive page count") from e
+            raise QrexecError("Failed to receive output information") from e
         except (AttributeError, UnicodeError, ValueError) as e:
             raise QrexecError("Failed to receive page count") from e
-
-        if 1 <= untrusted_pagenums <= MAX_PAGES:
-            pagenums = untrusted_pagenums
-        else:
-            raise PageError("Invalid page count")
-
-        return pagenums
 
 
     def _archive(self, archive):
         """Move original file into an archival directory"""
         Path.mkdir(archive, exist_ok=True)
         self.path.rename(Path(archive, self.path.name))
+
+
+    async def _receive_trusted_output(self):
+        """Receive a complete trusted output file from the server."""
+        try:
+            data = await recv_b(self.proc, self.base.size)
+        except asyncio.IncompleteReadError as e:
+            raise QrexecError("Received inconsistent number of bytes") from e
+
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            self.pdf.write_bytes,
+            data
+        )
+        self.bar.update(1)
+        self.bar.set_status("1/1")
 
 
 async def collect_jobs(params):
@@ -877,6 +914,13 @@ async def run(params):
         for result in results
     ):
         return LIBREOFFICE_MISSING_EXIT_CODE
+
+    if any(
+        isinstance(result, subprocess.CalledProcessError)
+        and result.returncode == FFMPEG_MISSING_EXIT_CODE
+        for result in results
+    ):
+        return FFMPEG_MISSING_EXIT_CODE
 
     return int(completed != total)
 

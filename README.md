@@ -30,7 +30,9 @@ Usage
 
 The generic `qvm-convert-file` command also supports LibreOffice-backed
 document and spreadsheet conversion for DOCX, ODT, XLSX, and ODS files. Those
-formats require LibreOffice to be installed in the relevant template.
+formats require LibreOffice to be installed in the relevant template. It also
+supports common video formats by re-encoding them to `.trusted.ogv` with
+FFmpeg, when FFmpeg is installed in the relevant template.
 
 Authors
 ---------

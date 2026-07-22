@@ -3,7 +3,19 @@ import os
 from gi.repository import Nautilus, GObject, GLib
 
 
-SUPPORTED_EXTENSIONS = ('.pdf', '.docx', '.odt', '.xlsx', '.ods')
+SUPPORTED_EXTENSIONS = (
+    '.pdf',
+    '.docx',
+    '.odt',
+    '.xlsx',
+    '.ods',
+    '.avi',
+    '.mkv',
+    '.mov',
+    '.mp4',
+    '.ogv',
+    '.webm',
+)
 
 
 class ConvertPdfItemExtension(GObject.GObject, Nautilus.MenuProvider):

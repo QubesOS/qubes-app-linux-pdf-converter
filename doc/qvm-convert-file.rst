@@ -4,7 +4,7 @@ QVM-CONVERT-FILE(1)
 
 NAME
 ====
-qvm-convert-file - converts potentially untrusted files to safe-to-view PDFs
+qvm-convert-file - converts potentially untrusted files to safe-to-view files
 
 SYNOPSIS
 ========
@@ -49,7 +49,7 @@ DESCRIPTION
 
 Qubes file converter is a Qubes Application that uses Qubes' flexible qrexec
 (inter-VM communication) infrastructure and Disposable VMs to convert
-potentially untrusted files into safe-to-view PDF files.
+potentially untrusted files into safe-to-view files.
 
 Supported input formats:
 
@@ -64,10 +64,15 @@ Supported input formats:
      - Converted through LibreOffice, then through the PDF rendering pipeline.
    * - XLSX, ODS
      - Converted through LibreOffice, then through the PDF rendering pipeline.
+   * - MP4, OGV, MOV, WEBM, MKV, AVI
+     - Re-encoded through FFmpeg into an Ogg/Theora/Vorbis video.
 
 For LibreOffice-backed formats, the converter first creates an intermediate PDF
 inside the conversion environment, then uses the same bitmap-based PDF
 conversion pipeline.
+
+For video formats, the converter writes a ``.trusted.ogv`` file next to the
+original file.
 
 File type detection is performed on the server side. Unsupported file types are
 rejected instead of being converted.
@@ -75,6 +80,10 @@ rejected instead of being converted.
 LibreOffice is optional for PDF conversion, but it is required for the supported
 office document and spreadsheet formats. If LibreOffice is missing, install it
 in the relevant template.
+
+FFmpeg is optional for PDF, document, and spreadsheet conversion, but it is
+required for the supported video formats. If FFmpeg is missing, install it in
+the relevant template.
 
 As with qvm-convert-pdf, the converted PDF may be larger than the original file
 and may lose structural information such as searchable text.

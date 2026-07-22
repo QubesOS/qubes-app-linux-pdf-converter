@@ -11,14 +11,18 @@ from unittest import mock
 
 import click
 
-from qubespdfconverter.constants import LIBREOFFICE_MISSING_EXIT_CODE
+from qubespdfconverter.constants import (
+    FFMPEG_MISSING_EXIT_CODE,
+    LIBREOFFICE_MISSING_EXIT_CODE,
+)
 from qubespdfconverter import ocr_config
 
 from qubespdfconverter.client import (
     BadPath,
     BaseFile,
+    ERROR_LOGS,
     Job,
-    PageError,
+    QrexecError,
     apply_ocr_default,
     expand_dir,
     run,
@@ -26,6 +30,12 @@ from qubespdfconverter.client import (
     validate_paths,
 )
 from qubespdfconverter.ocr import OcrDependencyError
+from qubespdfconverter.protocol import (
+    OutputFileError,
+    PageError,
+    TrustedOutput,
+    parse_output_header,
+)
 
 
 class DummyProc:
@@ -94,7 +104,7 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         handled = {call.args[0] for call in add_handler_mock.mock_calls}
         self.assertEqual(handled, {signal.SIGINT, signal.SIGTERM})
 
-    async def test_003_pagenums_propagates_missing_libreoffice_exit_code(self):
+    async def test_003_output_info_propagates_missing_libreoffice_exit_code(self):
         job = Job(Path("/tmp/test.docx"), 0)
         proc = DummyProc()
         proc.returncode = LIBREOFFICE_MISSING_EXIT_CODE
@@ -102,7 +112,7 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         job.proc = proc
 
         with self.assertRaises(subprocess.CalledProcessError) as exc:
-            await job._pagenums()
+            await job._output_info()
 
         self.assertEqual(exc.exception.returncode, LIBREOFFICE_MISSING_EXIT_CODE)
 
@@ -160,6 +170,110 @@ class TC_ClientCancel(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         self.assertEqual(params["ocr_lang"], "eng")
         check_mock.assert_called_once_with("eng")
+
+    async def test_007_ffmpeg_error_logs_fixed_message(self):
+        while not ERROR_LOGS.empty():
+            ERROR_LOGS.get_nowait()
+            ERROR_LOGS.task_done()
+
+        job = Job(Path("/tmp/test.mp4"), 0)
+        proc = DummyProc()
+
+        with mock.patch(
+            "asyncio.create_subprocess_exec", new=mock.AsyncMock(return_value=proc)
+        ):
+            job._setup = mock.AsyncMock(
+                side_effect=subprocess.CalledProcessError(
+                    FFMPEG_MISSING_EXIT_CODE,
+                    "qrexec-client-vm",
+                )
+            )
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                await job.run(Path("/tmp/archive"), depth=1, in_place=False)
+
+        self.assertTrue(proc.terminated)
+        error = await ERROR_LOGS.get()
+        ERROR_LOGS.task_done()
+        self.assertIn("FFmpeg is required for this file type", error)
+        self.assertIn("relevant template", error)
+
+    async def test_008_setup_accepts_trusted_output_header(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.bar = mock.Mock()
+            job._send = mock.AsyncMock()
+            job._output_info = mock.AsyncMock(return_value=TrustedOutput("ogv", 3))
+
+            await job._setup(tmpdir)
+
+        self.assertEqual(job.base, TrustedOutput("ogv", 3))
+        self.assertEqual(job.pdf.name, "source.trusted.ogv")
+        job.bar.reset.assert_called_once_with(total=1)
+
+    async def test_009_receive_trusted_output_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job = Job(Path(tmpdir, "source.mp4"), 0)
+            job.base = TrustedOutput("ogv", 3)
+            job.proc = mock.Mock()
+            job.pdf = Path(tmpdir, "source.trusted.ogv")
+            job.bar = mock.Mock()
+
+            with mock.patch(
+                "qubespdfconverter.client.recv_b",
+                new=mock.AsyncMock(return_value=b"ogv"),
+            ) as recv_mock:
+                await job._receive_trusted_output()
+
+            recv_mock.assert_awaited_once_with(job.proc, 3)
+            self.assertEqual(job.pdf.read_bytes(), b"ogv")
+            job.bar.update.assert_called_once_with(1)
+            job.bar.set_status.assert_called_once_with("1/1")
+
+    async def test_010_receive_trusted_output_rejects_short_read(self):
+        job = Job(Path("/tmp/source.mp4"), 0)
+        job.base = TrustedOutput("ogv", 3)
+        job.proc = mock.Mock()
+
+        with mock.patch(
+            "qubespdfconverter.client.recv_b",
+            new=mock.AsyncMock(
+                side_effect=asyncio.IncompleteReadError(b"o", 3)
+            ),
+        ):
+            with self.assertRaises(QrexecError):
+                await job._receive_trusted_output()
+
+    async def test_011_run_propagates_missing_ffmpeg_exit_code(self):
+        loop = asyncio.get_running_loop()
+
+        async def failed_task():
+            raise subprocess.CalledProcessError(
+                FFMPEG_MISSING_EXIT_CODE,
+                "qrexec-client-vm",
+            )
+
+        with mock.patch(
+            "qubespdfconverter.client.collect_jobs",
+            new=mock.AsyncMock(
+                return_value=([], [asyncio.create_task(failed_task())], 0)
+            ),
+        ), mock.patch(
+            "qubespdfconverter.client.apply_ocr_default",
+            return_value=True,
+        ), mock.patch.object(loop, "add_signal_handler"):
+            result = await run(
+                {
+                    "resolution": 300,
+                    "files": [Path("/tmp/test.mp4")],
+                    "archive": Path("/tmp/archive"),
+                    "batch": 1,
+                    "in_place": False,
+                    "ocr_lang": None,
+                }
+            )
+
+        self.assertEqual(result, FFMPEG_MISSING_EXIT_CODE)
 
 
 class TC_ExpandDir(unittest.TestCase):
@@ -261,6 +375,39 @@ class TC_ValidatePaths(unittest.TestCase):
         b = self._touch("b.pdf")
         result = validate_paths(None, None, [a, b])
         self.assertEqual(set(result), {a.resolve(), b.resolve()})
+
+
+class TC_OutputHeader(unittest.TestCase):
+    def test_000_parse_page_count_header(self):
+        self.assertEqual(parse_output_header("3"), 3)
+
+    def test_001_parse_trusted_file_header(self):
+        output = parse_output_header("FILE ogv 123")
+
+        self.assertEqual(output, TrustedOutput("ogv", 123))
+
+    def test_002_reject_invalid_trusted_file_suffix(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("FILE ../bad 123")
+
+    def test_003_reject_invalid_trusted_file_size(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("FILE ogv 0")
+
+    def test_004_reject_malformed_trusted_file_header(self):
+        with self.assertRaises(OutputFileError):
+            parse_output_header("FILE ogv")
+
+    def test_005_reject_invalid_page_count(self):
+        with self.assertRaises(PageError):
+            parse_output_header("0")
+
+    def test_006_reject_nonnumeric_page_count(self):
+        with self.assertRaises(ValueError):
+            parse_output_header("not-a-page-count")
+
+    def test_007_ffmpeg_exit_code_is_nonzero(self):
+        self.assertGreater(FFMPEG_MISSING_EXIT_CODE, 0)
 
 
 class TC_OcrLang(unittest.TestCase):
