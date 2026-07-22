@@ -6,22 +6,26 @@
 
 SYNOPSIS
 ========
-:command: `qvm-convert-file` [-h] [--batch SIZE] [--archive PATH] [--in-place]
-                             [--resolution RESOLUTION] [--password PASSWORD]
-                             [--ocr-lang LANGUAGE] [FILES ...]
+
+:program:`qvm-convert-file` [FILES ...]
+
+:program:`qvm-convert-file` [:option:`--password=PASSWORD`] [FILES ...]
+
+:program:`qvm-convert-file` [:option:`--ocr-lang=LANGUAGE`] [FILES ...]
 
 OPTIONS
-========
+=======
 
 .. option:: --help, -h
 
    Show help message and exit
 
-.. option:: --batch=SIZE, -b SIZE
+.. option:: --batch={<SIZE>}, -b {<SIZE>}
 
-   Maximum number of conversion tasks [x>=1]
+   Maximum number of conversion tasks. :samp:`{<SIZE>}` should be greater or
+   equal to ``1``.
 
-.. option:: --archive=PATH, -a PATH
+.. option:: --archive={<PATH>}, -a {<PATH>}
 
    Directory for storing archived files
 
@@ -29,15 +33,16 @@ OPTIONS
 
    Replace original files instead of archiving them
 
-.. option:: --resolution=RESOLUTION, -r RESOLUTION
+.. option:: --resolution={<RESOLUTION>}, -r {<RESOLUTION>}
 
-   Output resolution. default is 300 ppi [75<=x<=4800]
+   Output resolution. Default is 300 ppi. :samp:`{<RESOLUTION>}` should be
+   greater than ``75`` and lower than ``4800``.
 
-.. option:: --password=PASSWORD, -p PASSWORD
+.. option:: --password={<PASSWORD>}, -p {<PASSWORD>}
 
    Password to use for encrypted PDF files.
 
-.. option:: --ocr-lang=LANGUAGE
+.. option:: --ocr-lang={<LANGUAGE>}
 
    Tesseract language code to use for OCR output. Tesseract uses three-letter
    language codes such as ``eng`` for English, not two-letter locale codes.
@@ -45,8 +50,9 @@ OPTIONS
 DESCRIPTION
 ===========
 
-Qubes file converter is a Qubes Application that uses Qubes' flexible qrexec
-(inter-VM communication) infrastructure and Disposable VMs to convert
+:program:`Qubes file converter` is a Qubes application that utilizes Qubes'
+flexible :doc:`qrexec <developer/services/qrexec>` (inter-VM communication)
+infrastructure and :term:`disposables <disposable>` to securely convert
 potentially untrusted files into safe-to-view PDF files.
 
 Supported input formats:
@@ -77,9 +83,9 @@ in the relevant template.
 As with qvm-convert-pdf, the converted PDF may be larger than the original file
 and may lose structural information such as searchable text.
 
-If ``--ocr-lang`` is set, the converter adds a searchable text layer to the
+If :option:`--ocr-lang` is set, the converter adds a searchable text layer to the
 trusted PDF after the pages have been rendered to safe bitmaps. If
-``--ocr-lang`` is not set, the command uses the OCR setting saved by
+:option:`--ocr-lang` is not set, the command uses the OCR setting saved by
 ``qvm-convert-pdf-ocr-settings``.
 
 OCR is optional. For English OCR, install ``python3-fitz`` and
