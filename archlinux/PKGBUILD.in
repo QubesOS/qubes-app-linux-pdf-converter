@@ -5,7 +5,7 @@ arch=(x86_64)
 pkgdesc=$(grep "Summary:" ./rpm_spec/qpdf-converter.spec.in | sed 's/Summary://' | xargs)
 url="https://www.qubes-os.org/"
 license=(GPL)
-makedepends=(git pandoc python-setuptools)
+makedepends=(git python-sphinx python-setuptools)
 depends=(
     graphicsmagick
     poppler

@@ -61,3 +61,14 @@ option_emphasise_placeholders = True
 # -- -- Options for the nitpicky mode ------------------------------------------
 
 nitpicky = True
+
+# -- Options for manual page output --------------------------------------------
+
+# authors should be empty and authors should be specified in each man page,
+# because html builder will omit them
+man_pages = [
+    ('qvm-convert-pdf', 'qvm-convert-pdf',
+        'converts potentially untrusted PDFs to a safe-to-view PDF', [], 1),
+    ('qvm-convert-file', 'qvm-convert-file',
+        'converts potentially untrusted files to safe-to-view PDFs', [], 1),
+]
