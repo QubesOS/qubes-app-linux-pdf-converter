@@ -7,10 +7,10 @@ infrastructure and :term:`disposables <disposable>` to securely convert
 potentially untrusted files into safe-to-view PDF files.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   qvm-convert-pdf
-   qvm-convert-file
+   code/qubespdfconverter
+   manpages/index
 
 .. note::
 

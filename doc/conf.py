@@ -33,6 +33,7 @@ except:
 # -- General configuration ---------------------------------------------------
 
 extensions = [
+    "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",  # Reference other doc projects
 ]
 
