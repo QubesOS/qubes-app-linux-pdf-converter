@@ -6,7 +6,7 @@ Build-Depends:
  debhelper (>= 9~),
  dh-python,
  python3-setuptools,
- pandoc,
+ python3-sphinx,
  quilt
 X-Python-Version: 2.7
 Standards-Version: 3.9.5

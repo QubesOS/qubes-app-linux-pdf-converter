@@ -1,10 +1,8 @@
-===================
-QVM-CONVERT-FILE(1)
-===================
+.. program:: qvm-convert-file
 
-NAME
-====
-qvm-convert-file - converts potentially untrusted files to safe-to-view PDFs
+======================================================
+``qvm-convert-file`` -- |qvm-convert-file-description|
+======================================================
 
 SYNOPSIS
 ========
