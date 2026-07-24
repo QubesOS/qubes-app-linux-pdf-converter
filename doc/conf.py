@@ -37,17 +37,17 @@ extensions = [
 ]
 
 # -- Extensions configuration ------------------------------------------------
-# Allows references to the docs in dev.qubes-os.org
+# Allows references to the docs in doc.qubes-os.org
 # i.e.: :doc:`core-admin:libvirt`
 intersphinx_mapping = {
     "qubes-doc": ("https://doc.qubes-os.org/en/latest/", None),
-    "core-admin": ("https://dev.qubes-os.org/projects/core-admin/en/latest/", None),
+    "core-admin": ("https://doc.qubes-os.org/projects/core-admin/en/latest/", None),
     "core-admin-client": (
-        "https://dev.qubes-os.org/projects/core-admin-client/en/latest/",
+        "https://doc.qubes-os.org/projects/core-admin-client/en/latest/",
         None,
     ),
     "core-qrexec": (
-        "https://dev.qubes-os.org/projects/qubes-core-qrexec/en/stable/",
+        "https://doc.qubes-os.org/projects/core-qrexec/en/latest/",
         None,
     ),
 }
