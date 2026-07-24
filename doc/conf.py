@@ -67,8 +67,14 @@ nitpicky = True
 # authors should be empty and authors should be specified in each man page,
 # because html builder will omit them
 man_pages = [
-    ('qvm-convert-pdf', 'qvm-convert-pdf',
+    ('manpages/qvm-convert-pdf', 'qvm-convert-pdf',
         'converts potentially untrusted PDFs to a safe-to-view PDF', [], 1),
-    ('qvm-convert-file', 'qvm-convert-file',
+    ('manpages/qvm-convert-file', 'qvm-convert-file',
         'converts potentially untrusted files to safe-to-view PDFs', [], 1),
 ]
+
+rst_epilog_lines = []
+for _, name, description, _, _ in man_pages:
+    rst_epilog_lines.append(f'.. |{name}-description| replace:: {description}')
+
+rst_epilog = '\n'.join(rst_epilog_lines)
