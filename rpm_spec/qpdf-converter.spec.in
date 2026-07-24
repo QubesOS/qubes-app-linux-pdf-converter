@@ -35,7 +35,7 @@ URL:		http://www.qubes-os.org
 
 BuildArch: noarch
 BuildRequires: make
-BuildRequires: pandoc
+BuildRequires: python-sphinx 
 BuildRequires: python%{python3_pkgversion}-setuptools
 BuildRequires: python%{python3_pkgversion}-devel
 %if 0%{?is_opensuse}
