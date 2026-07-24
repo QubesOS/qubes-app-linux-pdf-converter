@@ -72,3 +72,9 @@ man_pages = [
     ('qvm-convert-file', 'qvm-convert-file',
         'converts potentially untrusted files to safe-to-view PDFs', [], 1),
 ]
+
+rst_epilog_lines = []
+for _, name, description, _, _ in man_pages:
+    rst_epilog_lines.append(f'.. |{name}-description| replace:: {description}')
+
+rst_epilog = '\n'.join(rst_epilog_lines)
