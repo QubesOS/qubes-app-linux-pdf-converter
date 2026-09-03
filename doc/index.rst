@@ -2,10 +2,10 @@ app-linux-pdf-converter's Qubes documentation
 =============================================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   qvm-convert-pdf
-   qvm-convert-file
+   code/qubespdfconverter
+   manpages/index
 
 Indices and tables
 ==================

@@ -64,8 +64,8 @@ very simple representation (RGB bitmap) that (presumably) leaves no room for
 malicious code. This representation is then sent back to the client AppVM which 
 then constructs an entirely new PDF file out of the received bitmaps.
 
-Of course, the price we pay for this conversion is an increase in file size and 
-the loss of any structural information or text-based search in the converted 
+Of course, the price we pay for this conversion is an increase in file size and
+the loss of any structural information or text-based search in the converted
 PDF.
 
 If ``--ocr-lang`` is set, the converter adds a searchable text layer to the
