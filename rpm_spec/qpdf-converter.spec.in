@@ -44,6 +44,8 @@ BuildRequires: python-nautilus-common-files
 BuildRequires: qubes-core-qrexec
 %endif
 
+%{?python_disable_dependency_generator}
+
 Requires:	poppler-utils GraphicsMagick
 %if 0%{?is_opensuse}
 Recommends:	(python-nautilus-common-files if nautilus)
