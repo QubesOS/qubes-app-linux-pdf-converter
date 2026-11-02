@@ -1,3 +1,9 @@
+qubes-pdf-converter (2.2.1-1) unstable; urgency=medium
+
+  * rpm: disable automatic dependencies
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Mon, 02 Nov 2026 21:27:38 +0100
+
 qubes-pdf-converter (2.2.0-1) unstable; urgency=medium
 
   [ Jayant-Kernel ]
