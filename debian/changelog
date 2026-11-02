@@ -1,3 +1,71 @@
+qubes-pdf-converter (2.2.0-1) unstable; urgency=medium
+
+  [ Jayant-Kernel ]
+  * pdf-converter: split server PDF rendering
+  * pdf-converter: add renderer dispatch
+  * pdf-converter: add qvm-convert-file PDF dispatch
+
+  [ Ben Grande ]
+  * Improve cancel conversion failure message
+
+  [ Jayant-Kernel ]
+  * pdf-converter: support multiple files and directory input
+  * tests: add unit tests for expand_dir and validate_paths
+
+  [ Marek Marczykowski-Górecki ]
+  * Do not pull in extra dependencies in dom0
+
+  [ Jayant-Kernel ]
+  * Clean up PDF converter tests
+  * pdf-converter: format server tests
+  * pdf-converter: add docx renderer
+
+  [ 3np ]
+  * chore: relax nautilus dependency
+
+  [ Jayant-Kernel ]
+  * pdf-converter: add ODT document conversion
+  * pdf-converter: add XLSX spreadsheet conversion
+  * pdf-converter: add ODS spreadsheet conversion
+  * pdf-converter: add qvm-convert-file desktop integration
+  * pdf-converter: report missing LibreOffice
+  * pdf-converter: document qvm-convert-file
+  * pdf-converter: add optional OCR output
+
+  [ Marek Marczykowski-Górecki ]
+  * Move integration tests to integ.py
+  * server: do not parse arguments on import
+  * Fixups for unit tests
+  * ci: do not run on R4.2 anymore
+  * ci: import codecov-wrapper
+  * ci: run unit tests
+
+  [ Jayant-Kernel ]
+  * pdf-converter: enable GUI OCR automatically
+  * pdf-converter: document supported formats
+
+  [ parulin ]
+  * Minimal Sphinx documentation for RTD
+  * Use sphinx-build instead of pandoc
+  * Fix manpages format
+  * Comment and update intersphinx links
+
+  [ Jayant-Kernel ]
+  * pdf-converter: add video conversion
+  * pdf-converter: add PPTX presentation conversion
+  * pdf-converter: add ODP presentation conversion
+
+  [ Marek Marczykowski-Górecki ]
+  * tests: cancel conversion later
+
+  [ Jayant-Kernel ]
+  * pdf-converter: add DOC document conversion
+
+  [ Marek Marczykowski-Górecki ]
+  * Support both python3-magic and python3-file-magic modules
+
+ -- Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>  Mon, 02 Nov 2026 15:17:40 +0100
+
 qubes-pdf-converter (2.1.26-1) unstable; urgency=medium
 
   [ Jayant-Kernel ]
