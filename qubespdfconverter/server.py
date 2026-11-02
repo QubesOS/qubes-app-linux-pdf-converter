@@ -360,7 +360,10 @@ def detect_mime(path):
     if magic is None:
         raise ValueError("python-magic is required for MIME detection")
 
-    return magic.from_file(str(path), mime=True)
+    # support both python3-magic and python3-file-magic
+    if hasattr(magic, "from_file"):
+        return magic.from_file(str(path), mime=True)
+    return magic.detect_from_filename(str(path)).mime_type
 
 
 def renderer_name_for_path(path):

@@ -53,7 +53,7 @@ Recommends:	(nautilus-python if nautilus)
 Requires:	python%{python3_pkgversion} >= 3.7
 Requires:	python%{python3_pkgversion}-pillow
 Requires:	python%{python3_pkgversion}-click
-Requires:	python%{python3_pkgversion}-magic
+Requires:	(python%{python3_pkgversion}-magic or python%{python3_pkgversion}-file-magic)
 Requires:	python%{python3_pkgversion}-tqdm
 Recommends:	zenity
 Suggests:	libreoffice
